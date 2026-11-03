@@ -81,9 +81,17 @@ Install into a DSH profile (the path that gives sessions the `team_workflow_*`
 tools and the usage section):
 
 ```bash
-dsh plugin --profile desktop add /absolute/path/to/plugins/agent-team-workflow
+# from GitHub
+dsh plugin --profile desktop add github:lyingloong/agent-team-workflow
+
+# or from a local checkout
+dsh plugin --profile desktop add /absolute/path/to/agent-team-workflow
+
 # restart that profile's Harness process, then refresh the Web GUI
 ```
+
+Published npm installs use the same plugin name:
+`dsh plugin --profile desktop add agent-team-workflow`.
 
 [cordis.patch.yml](cordis.patch.yml) mounts the plugin. In any session, describe
 the workflow in natural language:

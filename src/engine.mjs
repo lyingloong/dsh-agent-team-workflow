@@ -1,7 +1,7 @@
 /**
  * Coordination engine for external workers.
  *
- * Weft never runs an agent itself. A worker (a host session, a CLI agent, a
+ * The engine never runs an agent itself. A worker (a host session, a CLI agent, a
  * script) pulls work with `claim()` and reports back with `complete()` or
  * `fail()`. Every transition is an event, so a crash between claim and report
  * is recoverable: the lease expires and the task becomes claimable again.
