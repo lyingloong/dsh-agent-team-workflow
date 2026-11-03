@@ -25,6 +25,7 @@ import { acquireLock } from './lock.mjs';
 import { dataPaths, ensureDataDir } from './paths.mjs';
 import { buildBoardData } from './board/data.mjs';
 import { startBoardServer } from './board/server.mjs';
+import { installWebApi } from './web-api.mjs';
 
 export const name = 'dsh-agent-team-workflow';
 export const inject = ['tools', 'systemPrompt'];
@@ -244,6 +245,12 @@ export function apply(ctx, config = {}) {
   } catch (error) {
     logger.warn(`dsh-agent-team-workflow: could not install the usage section: ${error.message}`);
   }
+
+  // --- embedded panel API --------------------------------------------------
+
+  // Routes are optional: a headless profile has no web server, and the tools
+  // keep working. Service binding retries when the Web composition lands.
+  installWebApi({ ctx, settings, logger });
 
   // --- lifecycle -----------------------------------------------------------
 

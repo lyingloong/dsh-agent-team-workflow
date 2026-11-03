@@ -16,5 +16,7 @@ import './scheduler.test.mjs';
 import './engine.test.mjs';
 import './status.test.mjs';
 import './board.test.mjs';
+import './web-api.test.mjs';
+import './client-bundle.test.mjs';
 import './plugin.test.mjs';
 import './cli.test.mjs';

@@ -28,3 +28,13 @@ Initial release.
   DSH plugin naming convention. Tool names (`team_workflow_*`), the CLI binaries
   (`agent-team-workflow` / `atw`) and the per-workspace state directory
   (`.agent-team-workflow`) are unchanged.
+
+## 0.1.3
+
+- Embed the board in the DSH Web GUI: a `dsh.client` bundle registers a native
+  right-sidebar tab and a conversation-header entry. The panel lists
+  workspaces, renders the workflow board, approves/rejects gates and enqueues
+  tasks through same-origin host routes (no iframe, no CORS).
+- Host registers `/plugins/dsh-agent-team-workflow/api/workspaces|board|gate|enqueue`
+  from the registered workspace list; arbitrary paths are rejected.
+- The standalone loopback board remains available for headless/CLI use.

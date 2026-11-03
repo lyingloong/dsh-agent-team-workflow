@@ -7,10 +7,10 @@ trust over days: roles with capacity, a durable event log, model lanes with
 automatic failover, gates that record decisions instead of taking them, and a
 local board that shows the real projected state.
 
-**Status:** engine, pull-mode coordination, the local board, and the DSH plugin
-adapter (P1–P4). Optional forge observation lands next. The engine imports no
-host, model vendor or forge — the DSH adapter talks to the host only through
-`ctx` services.
+**Status:** engine, pull-mode coordination, the standalone board, the DSH plugin
+adapter, and the embedded Web GUI panel (P1–P4). Optional forge observation
+lands next. The engine imports no host, model vendor or forge — the DSH adapter
+talks to the host only through `ctx` services.
 
 ## Why another agent orchestrator
 
@@ -136,6 +136,28 @@ The board and CLI read the same workspace directory:
 atw board --data .agent-team-workflow
 atw status --data .agent-team-workflow
 ```
+
+## Embedded panel
+
+Installing the bundle also registers a native Web GUI panel (`dsh.client`,
+`lib/client.js`): after restarting the host, a **工作流** entry appears in the
+conversation header, and the same tab is available in the right sidebar. The
+panel is React, not an iframe:
+
+- it lists the host's registered workspaces and remembers the selected one;
+- it renders the same stage columns, cards, lane health, pending gates and
+  enqueue box as the standalone board;
+- it reads and writes through same-origin
+  `/plugins/dsh-agent-team-workflow/api/*` routes registered by the host plugin,
+  so it works in the Electron and browser clients without CORS;
+- approving/rejecting a gate and adding a task call the same engine paths as the
+  tools. It never merges, closes or pushes.
+
+The workflow still belongs to one workspace (`<workspace>/.agent-team-workflow`);
+the panel's workspace selector only switches which workspace it displays. A
+workspace with no workflow shows an empty state instead of creating one.
+
+The standalone board below remains for headless/CLI use.
 
 ## Board
 
@@ -295,7 +317,7 @@ the source of truth.
 | P1 | Definition schema, event store, lock, roster/status, scheduler simulation — **done** |
 | P2 | Pull-mode lifecycle, attempt leases, retry backoff, gates, recovery — **done** |
 | P3 | Provider failover, local kanban board, workflow scaffolding — **done** |
-| P4 | DSH plugin: `team_workflow_*` tools, usage section, subagent delegation — **done** |
+| P4 | DSH plugin: `team_workflow_*` tools, usage section, subagent delegation, embedded right-sidebar panel — **done** |
 | P5 | Optional forge observation (PR/CI facts; still no merge) |
 | P6 | Docs, CI, publish to npm / standalone repository |
 
