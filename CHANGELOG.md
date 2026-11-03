@@ -56,3 +56,9 @@ Initial release.
 - Host routes are `/plugins/dsh-agent-team-workflow/api/board|gate|enqueue` with
   a validated `session` parameter.
 - Added `examples/product-team.json` (five nodes, five roles, publish gate).
+
+## 0.2.1
+
+- Require the DSH Connection's authentication fence on the embedded API routes.
+  Requests without a Connection (or rejected by it) now get 503/401/403 instead
+  of exposing or mutating workflow state. No client or UI change.

@@ -134,13 +134,27 @@ export function installWebApi({ ctx, dataRoot, logger = console }) {
   });
 
   let attached = false;
+  const connection = () => ctx.get?.('connection');
+  const authenticated = handler => async (req, res) => {
+    const gate = connection();
+    const rejection = gate === undefined
+      ? 503
+      : typeof gate.requestRejection === 'function' ? gate.requestRejection(req) : undefined;
+    if (rejection !== undefined) {
+      sendJson(res, rejection, {
+        error: rejection === 503 ? 'authentication unavailable' : rejection === 401 ? 'unauthorized' : 'forbidden',
+      });
+      return;
+    }
+    await handler(req, res);
+  };
   const attach = () => {
     if (attached) return true;
     const server = ctx.get?.('webServer') ?? ctx.get?.('httpServer');
     if (!server || typeof server.register !== 'function') return false;
     attached = true;
     for (const [routePath, handler] of routes) {
-      const register = () => server.register({ kind: 'exact', path: routePath, handler });
+      const register = () => server.register({ kind: 'exact', path: routePath, handler: authenticated(handler) });
       if (typeof ctx.effect === 'function') {
         ctx.effect(register, `dsh-agent-team-workflow: ${routePath}`);
       } else {

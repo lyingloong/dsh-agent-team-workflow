@@ -38,6 +38,7 @@ function setup(t) {
   const routes = new Map();
   const ctx = {
     get(name) {
+      if (name === 'connection') return { requestRejection: () => undefined };
       if (name === 'webServer') {
         return {
           register(route) {
@@ -155,4 +156,33 @@ test('ignores a host without a web server', () => {
     on() {},
   };
   assert.doesNotThrow(() => installWebApi({ ctx, dataRoot: os.tmpdir(), logger: { warn() {} } }));
+});
+
+test('rejects unauthenticated requests on the registered routes', async (t) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'team-workflow-auth-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 }));
+  const routes = new Map();
+  const ctx = {
+    get(name) {
+      if (name === 'webServer') {
+        return {
+          register(route) {
+            routes.set(route.path, route.handler);
+            return () => routes.delete(route.path);
+          },
+        };
+      }
+      return undefined;
+    },
+    effect(fn) {
+      fn();
+    },
+    on() {},
+  };
+  installWebApi({ ctx, dataRoot: path.join(dir, '.data'), logger: { warn() {} } });
+  const result = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/board'), {
+    url: `/plugins/dsh-agent-team-workflow/api/board?session=${SESSION}`,
+  });
+  assert.equal(result.status, 503);
+  assert.deepEqual(result.json, { error: 'authentication unavailable' });
 });
