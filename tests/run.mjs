@@ -9,6 +9,7 @@
  * Use the standard runner with: node --test tests/
  */
 
+import './v2-runtime.test.mjs';
 import './definition.test.mjs';
 import './store.test.mjs';
 import './lock.test.mjs';
