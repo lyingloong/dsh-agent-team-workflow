@@ -1,0 +1,132 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { EventEmitter } from 'node:events';
+
+import { installWebApi } from '../src/v2/web-api.mjs';
+import { normalizeDefinition } from '../src/v2/definition.mjs';
+import { SessionStore } from '../src/v2/store.mjs';
+
+const SESSION = 'session-v2-api';
+const FLOW = normalizeDefinition({
+  apiVersion: 2,
+  name: 'api-flow',
+  entry: 'seed',
+  nodes: [
+    { id: 'seed', type: 'human', config: { outcomes: ['approve'] } },
+    { id: 'run', type: 'command', config: { command: 'echo ok' } },
+  ],
+  edges: [{ from: 'seed', to: 'run', on: 'approve' }],
+});
+
+function setup(t) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'workflow-v2-api-'));
+  const dataRoot = path.join(dir, '.data');
+  const routes = new Map();
+  const agents = new Map();
+  const exec = { agent: { id: SESSION, session: { header: { cwd: dir } } }, signal: new AbortController().signal };
+  agents.set(SESSION, exec);
+  const ctx = {
+    get(name) {
+      if (name === 'webServer') {
+        return {
+          register(route) {
+            routes.set(route.path, route.handler);
+            return () => routes.delete(route.path);
+          },
+        };
+      }
+      if (name === 'connection') return { requestRejection: () => undefined };
+      return undefined;
+    },
+    effect(fn) {
+      fn();
+    },
+    on() {},
+  };
+  installWebApi({ ctx, dataRoot, agents, settings: { subagentProvider: 'spawn', maxSteps: 10 }, logger: { warn() {} } });
+  const store = new SessionStore(path.join(dataRoot, 'sessions', SESSION));
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 }));
+  return { routes, store };
+}
+
+function response() {
+  return {
+    status: 0,
+    headers: {},
+    body: '',
+    writeHead(status, headers) {
+      this.status = status;
+      this.headers = headers;
+    },
+    end(body) {
+      this.body = body;
+    },
+  };
+}
+
+async function invoke(handler, { method = 'GET', url, body } = {}) {
+  const res = response();
+  const req = new EventEmitter();
+  req.method = method;
+  req.url = url;
+  req.destroy = () => {};
+  queueMicrotask(() => {
+    if (body !== undefined) req.emit('data', Buffer.from(JSON.stringify(body)));
+    req.emit('end');
+  });
+  await handler(req, res);
+  return { status: res.status, json: res.body === '' ? null : JSON.parse(res.body) };
+}
+
+test('v2 web API supports state, start, decide and run', async (t) => {
+  const { routes, store } = setup(t);
+  assert.deepEqual([...routes.keys()].sort(), [
+    '/plugins/dsh-agent-team-workflow/api/decide',
+    '/plugins/dsh-agent-team-workflow/api/run',
+    '/plugins/dsh-agent-team-workflow/api/start',
+    '/plugins/dsh-agent-team-workflow/api/state',
+  ]);
+  await store.saveDefinition({ definition: FLOW, permissions: { command: { mode: 'full', allow: [] } } });
+
+  const state0 = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/state'), {
+    url: `/plugins/dsh-agent-team-workflow/api/state?session=${SESSION}`,
+  });
+  assert.equal(state0.status, 200);
+  assert.equal(state0.json.defined, true);
+  assert.equal(state0.json.run, null);
+
+  const started = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/start'), {
+    method: 'POST',
+    url: '/plugins/dsh-agent-team-workflow/api/start',
+    body: { session: SESSION, input: {} },
+  });
+  assert.equal(started.status, 201);
+  assert.equal(started.json.run.status, 'running');
+
+  const waiting = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/run'), {
+    method: 'POST',
+    url: '/plugins/dsh-agent-team-workflow/api/run',
+    body: { session: SESSION, runId: started.json.run.runId },
+  });
+  assert.equal(waiting.status, 200);
+  assert.equal(waiting.json.run.status, 'waiting');
+  const tokenId = waiting.json.run.tokens.find(token => token.status === 'waiting').id;
+
+  const decided = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/decide'), {
+    method: 'POST',
+    url: '/plugins/dsh-agent-team-workflow/api/decide',
+    body: { session: SESSION, runId: started.json.run.runId, tokenId, outcome: 'approve' },
+  });
+  assert.equal(decided.status, 200);
+
+  const done = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/run'), {
+    method: 'POST',
+    url: '/plugins/dsh-agent-team-workflow/api/run',
+    body: { session: SESSION, runId: started.json.run.runId },
+  });
+  assert.equal(done.status, 200);
+  assert.equal(done.json.run.status, 'done');
+});
