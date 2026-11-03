@@ -44,10 +44,10 @@ When the user describes a team or an automated workflow in natural language ("åˆ
 
 Definition rules:
 - roles[]: {id, kind: worker|reviewer|coordinator, instances, capacity, providers[]}. A role is a reusable worker type; instances Ã— capacity is its concurrency.
-- providers[]: {id, model, concurrency, backoffMinutes[]}. A lane is one model account or route; roles and stages reference lanes by id.
-- stages[]: {id, role, title, options[], on: {outcome: nextStage}}. A stage without on is terminal. entry defaults to the first stage; every stage must be reachable and at least one terminal stage is required.
+- providers[]: {id, adapter, model, reasoningEffort, maxTokens, concurrency, backoffMinutes[]}. A lane is one model account or route; roles and stages reference lanes by id. adapter/model/reasoningEffort/maxTokens are passed to the subagent as agentOptions when a delegated stage claims that lane; omit them (or use model "host-default") to inherit the host default.
+- stages[]: {id, role, title, executor, options[], on: {outcome: nextStage}}. executor is "agent" (default: team_workflow_delegate may spawn a subagent) or "external" (a script or human claims it with team_workflow_claim). A stage without on is terminal. entry defaults to the first stage; every stage must be reachable and at least one terminal stage is required.
 - A stage may narrow its role's lane pool with providers[].
-- gates[]: {id, after, outcome?, kind: manual|external, required}. A gate pauses the item after that stage/outcome. It never merges, closes or pushes anything.
+- gates[]: {id, after, outcome?, kind: manual|external, required}. A gate pauses the item after that stage/outcome. It never merges, closes or pushes anything. Pending gates show their wait time in the panel; no push scheduler is built in.
 - policies: concurrency.global, retry.maxAttempts/backoffSeconds, fallback.sameRole.
 - A provider error (429, quota, rate limit, timeout) is reported through team_workflow_fail with providerError=true (or inferred from the message); that lane parks for its backoff and the task retries on another lane.
 
@@ -58,7 +58,7 @@ Defining:
 
 Running:
 - team_workflow_status and team_workflow_plan show the projected state and ready tasks.
-- team_workflow_delegate claims one ready task whose stage has a single outcome, spawns a subagent to do it, and records the result when it settles. Call it again for the next task; do not spawn more tasks than the engine reports ready.
+- team_workflow_delegate claims one ready task whose stage is executor "agent" and has a single outcome, spawns a subagent with the claimed lane's agentOptions, and records the result when it settles. Call it again for the next task; do not spawn more tasks than the engine reports ready. External stages must be claimed by a script or human instead.
 - Workers outside DSH use team_workflow_claim, then team_workflow_complete or team_workflow_fail with the attempt id.
 - Decide gates with team_workflow_gate. Never invent tasks, and never bypass role/provider capacity.`;
 
@@ -728,7 +728,7 @@ function toolPlan({ sessionIdOf, withSession }) {
 function toolDelegate({ sessionIdOf, settings, subagentsOf, activations, logger, withSession }) {
   return {
     name: 'team_workflow_delegate',
-    description: 'Claim one ready task whose stage has exactly one outcome, spawn a subagent to do the work, and record completion or failure when it settles. Returns immediately; use team_workflow_status to observe progress. Requires a host subagent provider.',
+    description: 'Claim one ready task whose stage is executor "agent" and has exactly one outcome, spawn a subagent with the claimed lane\'s agentOptions, and record completion or failure when it settles. Returns immediately; use team_workflow_status to observe progress. Requires a host subagent provider. External stages must be claimed by a script or human instead.',
     parameters: objectSchema({
       role: stringSchema('Role whose ready task should be delegated.'),
       member: stringSchema('Member name recorded on the attempt; defaults to <role>-agent.'),
@@ -764,27 +764,39 @@ function toolDelegate({ sessionIdOf, settings, subagentsOf, activations, logger,
       let claimed;
       let outcome;
       let definitionName;
+      let lane;
       try {
         const opened = withSession(session, ({ engine, definition }) => {
           const peeked = engine.peek({ role });
           if (!peeked) return { reason: 'no ready task for that role' };
           const stage = definition.stages.find(candidate => candidate.id === peeked.stage);
+          if (stage.executor === 'external') {
+            return { reason: `stage "${stage.id}" is external; claim it with an external worker instead` };
+          }
           const outcomes = Object.keys(stage.on);
           if (outcomes.length !== 1) {
             return { reason: `stage "${stage.id}" has ${outcomes.length} outcomes; decide it with team_workflow_complete instead` };
           }
           const claimedTask = engine.claim({ role, member, provider });
           if (!claimedTask) return { reason: 'could not claim a task' };
-          return { claimed: claimedTask, outcome: outcomes[0], definitionName: definition.name };
+          const selectedLane = definition.providers.find(candidate => candidate.id === claimedTask.task.provider) ?? null;
+          return { claimed: claimedTask, outcome: outcomes[0], definitionName: definition.name, lane: selectedLane };
         });
         if (!opened.claimed) return { spawned: false, reason: opened.reason };
         claimed = opened.claimed;
         outcome = opened.outcome;
         definitionName = opened.definitionName;
+        lane = opened.lane;
       } catch (error) {
         if (/no workflow is defined/.test(error.message)) throw error;
         throw error;
       }
+
+      const agentOptions = {};
+      if (lane?.adapter) agentOptions.provider = lane.adapter;
+      if (lane?.model && lane.model !== 'host-default') agentOptions.model = lane.model;
+      if (lane?.reasoningEffort) agentOptions.reasoningEffort = lane.reasoningEffort;
+      if (lane?.maxTokens) agentOptions.maxTokens = lane.maxTokens;
 
       const prompt = workerPrompt({ workflowName: definitionName, cwd, claimed, outcome });
       let activation;
@@ -796,6 +808,7 @@ function toolDelegate({ sessionIdOf, settings, subagentsOf, activations, logger,
             prompt: [{ type: 'text', text: prompt }],
             parent: exec.agent,
             cwd,
+            ...(Object.keys(agentOptions).length > 0 ? { agentOptions } : {}),
           },
           signal: exec.signal,
           delivery: 'caller',

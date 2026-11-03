@@ -116,6 +116,7 @@ export function buildBoardData({ snapshot, definition, now = new Date().toISOStr
         id: stage.id,
         title: stage.title ?? stage.id,
         role: stage.role,
+        executor: stage.executor ?? 'agent',
         providers: stage.providers,
         outcomes: Object.keys(stage.on),
         on: { ...stage.on },

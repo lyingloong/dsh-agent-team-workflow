@@ -151,3 +151,11 @@ test('panel exposes overview, filters, structured cards and feedback', () => {
   assert.ok(SOURCE.includes('timeAgo'));
   assert.ok(SOURCE.includes('detailRows'));
 });
+
+test('graph affordances do not rely on instructional microcopy', () => {
+  assert.ok(!SOURCE.includes('点击节点筛选'));
+  assert.ok(!SOURCE.includes('atw-graph-hint'));
+  assert.ok(!SOURCE.includes('atw-graph-legend'));
+  assert.ok(SOURCE.includes('atw-executor'));
+  assert.ok(SOURCE.includes('maxWidth: "100%"'));
+});

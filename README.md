@@ -230,6 +230,47 @@ Each role may list several providers, and a stage may narrow that pool:
 - A parked lane becomes usable again when `blockedUntil` passes; the board and
   `status` report it as healthy at that point. Keys are never rotated.
 
+## Nodes and executors
+
+A node is one **stage** in the definition. It is control-flow data, not a
+running process:
+
+```json
+{
+  "id": "review",
+  "title": "审查",
+  "role": "reviewer",
+  "executor": "agent",
+  "options": ["pass", "needs_revision"],
+  "on": { "pass": "ready", "needs_revision": "draft" },
+  "providers": ["lane-a", "lane-b"],
+  "maxAttempts": 3
+}
+```
+
+- `role` decides who may claim the task; the role's `kind` and `providers`
+  narrow the worker type and lane pool.
+- `executor` is either `agent` (default) or `external`. An `agent` stage may be
+  delegated to a model subagent with `team_workflow_delegate`; an `external`
+  stage is pulled by a script, automation or human through
+  `team_workflow_claim` / `team_workflow_complete`.
+- The plugin does **not** embed shell commands. A script worker is a process
+  you run next to the workflow; it claims an attempt and reports back. That is
+  deliberate: execution stays outside the engine and works with any runner.
+- `options` / `on` define the review mechanism: a review stage returns `pass`
+  or `needs_revision`, and the graph loops or advances accordingly.
+- `gates` are the user-verification mechanism. A manual gate pauses the item
+  after a stage/outcome; approve/reject it from the panel or
+  `team_workflow_gate`. Pending gates show their wait time, but there is no
+  built-in push/reminder scheduler yet.
+- Provider lanes are real execution hints for delegated agents: when a stage
+  claims a lane, the lane's `adapter`, `model`, `reasoningEffort` and
+  `maxTokens` are passed to the subagent as `agentOptions`. Omit them (or use
+  `model: "host-default"`) to inherit the host default.
+- Several lanes per role/stage give least-loaded selection; a provider error
+  parks that lane and releases the task so the next claim can use another lane.
+  The caller (or model) re-delegates to use the fallback.
+
 ## Definition
 
 ```json

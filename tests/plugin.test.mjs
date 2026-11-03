@@ -364,3 +364,76 @@ test('reports provider errors and retries on another lane through tools', async 
   const status = await call('team_workflow_status');
   assert.equal(status.providers.find(provider => provider.id === 'lane-a').health, 'blocked');
 });
+
+const AGENT_OPTIONS_WORKFLOW = {
+  apiVersion: 1,
+  name: 'agent-options-flow',
+  roles: [{ id: 'worker' }],
+  providers: [{
+    id: 'lane-a',
+    adapter: 'deepseek',
+    model: 'deepseek-chat',
+    reasoningEffort: 'high',
+    maxTokens: 4096,
+    concurrency: 1,
+  }],
+  stages: [
+    { id: 'work', role: 'worker', on: { complete: 'done' } },
+    { id: 'done', role: 'worker' },
+  ],
+};
+
+test('passes the claimed lane agent options into the subagent activation', async (t) => {
+  const calls = [];
+  const subagents = {
+    async startActivation(spec) {
+      calls.push(spec);
+      return {
+        childId: 'child-opts',
+        result: Promise.resolve({ output: [{ type: 'text', text: 'done' }], stopReason: 'completed' }),
+        dispose: async () => {},
+      };
+    },
+  };
+  const { call } = setup(t, { subagents });
+  const defined = await call('team_workflow_define', { definition: AGENT_OPTIONS_WORKFLOW });
+  assert.equal(defined.ok, true, JSON.stringify(defined.errors));
+  await call('team_workflow_enqueue', { title: 'lane options' });
+  const delegated = await call('team_workflow_delegate', { role: 'worker' });
+  assert.equal(delegated.spawned, true);
+  assert.deepEqual(calls[0].request.agentOptions, {
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    reasoningEffort: 'high',
+    maxTokens: 4096,
+  });
+  await new Promise(resolve => setTimeout(resolve, 120));
+});
+
+test('delegate refuses an external stage', async (t) => {
+  const calls = [];
+  const subagents = {
+    async startActivation(spec) {
+      calls.push(spec);
+      throw new Error('must not spawn');
+    },
+  };
+  const { call } = setup(t, { subagents });
+  const defined = await call('team_workflow_define', {
+    definition: {
+      apiVersion: 1,
+      name: 'external-flow',
+      roles: [{ id: 'worker' }],
+      stages: [
+        { id: 'work', role: 'worker', executor: 'external', on: { complete: 'done' } },
+        { id: 'done', role: 'worker' },
+      ],
+    },
+  });
+  assert.equal(defined.ok, true, JSON.stringify(defined.errors));
+  await call('team_workflow_enqueue', { title: 'external work' });
+  const delegated = await call('team_workflow_delegate', { role: 'worker' });
+  assert.equal(delegated.spawned, false);
+  assert.match(delegated.reason, /external/);
+  assert.equal(calls.length, 0);
+});

@@ -13,14 +13,15 @@ const ROLE_KINDS = ['worker', 'reviewer', 'coordinator'];
 const GATE_KINDS = ['manual', 'external', 'auto'];
 const SOURCE_KINDS = ['manual', 'file', 'github-issues'];
 const WORKDIR_KINDS = ['repo', 'worktree', 'temp'];
+const EXECUTOR_KINDS = ['agent', 'external'];
 
 const TOP_LEVEL_KEYS = [
   'apiVersion', 'name', 'description', 'entry', 'roles', 'providers',
   'stages', 'gates', 'sources', 'policies',
 ];
 const ROLE_KEYS = ['id', 'kind', 'instances', 'capacity', 'providers', 'prompt', 'tools', 'workdir'];
-const PROVIDER_KEYS = ['id', 'adapter', 'model', 'concurrency', 'lowWatermarkPct', 'backoffMinutes', 'quota'];
-const STAGE_KEYS = ['id', 'role', 'title', 'requires', 'options', 'on', 'maxAttempts', 'providers'];
+const PROVIDER_KEYS = ['id', 'adapter', 'model', 'reasoningEffort', 'maxTokens', 'concurrency', 'lowWatermarkPct', 'backoffMinutes', 'quota'];
+const STAGE_KEYS = ['id', 'role', 'title', 'executor', 'requires', 'options', 'on', 'maxAttempts', 'providers'];
 const GATE_KEYS = ['id', 'after', 'outcome', 'kind', 'signal', 'required'];
 const SOURCE_KEYS = ['id', 'kind', 'path'];
 const POLICY_KEYS = ['concurrency', 'provider', 'fallback', 'review', 'retry', 'scheduler'];
@@ -172,7 +173,8 @@ export function describeDefinition(definition) {
       ? 'terminal'
       : outcomes.map(([outcome, target]) => `${outcome} -> ${target}`).join(', ');
     const providers = stage.providers.length > 0 ? `, ${stage.providers.join('/')}` : '';
-    lines.push(`  ${stage.id} [${stage.role}${providers}]: ${arrow}`);
+    const executor = stage.executor !== 'agent' ? `, ${stage.executor}` : '';
+    lines.push(`  ${stage.id} [${stage.role}${providers}${executor}]: ${arrow}`);
   }
   if (definition.gates.length > 0) {
     lines.push('gates:');
@@ -184,7 +186,8 @@ export function describeDefinition(definition) {
   if (definition.providers.length > 0) {
     lines.push('providers:');
     for (const provider of definition.providers) {
-      lines.push(`  ${provider.id}${provider.model ? ` (${provider.model})` : ''}, concurrency ${provider.concurrency}`);
+      const route = [provider.adapter, provider.model].filter(Boolean).join('/');
+      lines.push(`  ${provider.id}${route ? ` (${route})` : ''}, concurrency ${provider.concurrency}`);
     }
   }
   return lines.join('\n');
@@ -275,13 +278,19 @@ function readProviders(raw, errors) {
         };
       }
     }
-    if (provider.adapter !== undefined) readString(provider.adapter, `${path}.adapter`, errors);
-    if (provider.model !== undefined) readString(provider.model, `${path}.model`, errors);
+    if (provider.adapter !== undefined) readString(provider.adapter, `${path}.adapter`, errors, { max: 120 });
+    if (provider.model !== undefined) readString(provider.model, `${path}.model`, errors, { max: 200 });
+    if (provider.reasoningEffort !== undefined) readString(provider.reasoningEffort, `${path}.reasoningEffort`, errors, { max: 80 });
+    const maxTokens = provider.maxTokens === undefined
+      ? undefined
+      : readInteger(provider.maxTokens, `${path}.maxTokens`, errors, { min: 1, max: 1_000_000 });
     if (id) {
       providers.push({
         id,
         adapter: typeof provider.adapter === 'string' ? provider.adapter : null,
         model: typeof provider.model === 'string' ? provider.model : null,
+        reasoningEffort: typeof provider.reasoningEffort === 'string' ? provider.reasoningEffort : null,
+        maxTokens: maxTokens ?? null,
         concurrency,
         lowWatermarkPct: lowWatermarkPct ?? null,
         backoffMinutes: backoffMinutes ?? null,
@@ -307,6 +316,10 @@ function readStages(raw, errors) {
     const role = readString(stage.role, `${path}.role`, errors);
     const requires = stage.requires === undefined ? [] : readStringArray(stage.requires, `${path}.requires`, errors);
     const providers = stage.providers === undefined ? [] : readStringArray(stage.providers, `${path}.providers`, errors);
+    const executor = stage.executor === undefined ? 'agent' : stage.executor;
+    if (!EXECUTOR_KINDS.includes(executor)) {
+      errors.push({ path: `${path}.executor`, message: `must be one of ${EXECUTOR_KINDS.join(', ')}` });
+    }
     if (stage.title !== undefined) readString(stage.title, `${path}.title`, errors, { max: 200 });
     let on = {};
     if (stage.on !== undefined) {
@@ -334,6 +347,7 @@ function readStages(raw, errors) {
         id,
         role,
         title: typeof stage.title === 'string' ? stage.title : null,
+        executor,
         requires,
         providers,
         options,

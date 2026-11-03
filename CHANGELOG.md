@@ -95,3 +95,20 @@ Initial release.
 - Fix the DAG growing with the panel: the SVG keeps its intrinsic width, scales
   down only when the pane is narrower (`max-width: 100%`) and stays centered.
 - Expose workflow `createdAt`/`updatedAt` in the board projection for uptime.
+
+## 0.3.0
+
+- Add `stage.executor`: `agent` (default) or `external`. `team_workflow_delegate`
+  refuses external stages; scripts and humans pull them with
+  `team_workflow_claim` / `team_workflow_complete`. The board marks external
+  nodes.
+- Provider lanes now carry real subagent execution options: `adapter`, `model`,
+  `reasoningEffort` and `maxTokens` are passed as `agentOptions` when a delegated
+  stage claims that lane. `host-default` or omission inherits the host default.
+  Multiple lanes, role/stage pools, least-loaded selection and provider-error
+  parking/fallback remain.
+- Remove instructional microcopy: the "click a node" hint, graph legend and
+  session badge are gone. Graph nodes use hover/selection affordance; clicking a
+  node filters the task list.
+- Show how long a pending gate has been waiting in the panel.
+- 118 tests.

@@ -171,3 +171,42 @@ test('describes a multi-lane definition', () => {
   assert.match(text, /analyst x3/);
   assert.match(text, /review \[reviewer\]: pass -> approved/);
 });
+
+test('stages default to the agent executor and accept external executors', () => {
+  const base = normalizeDefinition(minimal);
+  assert.equal(base.stages[0].executor, 'agent');
+
+  const external = normalizeDefinition({
+    ...minimal,
+    stages: [{ id: 'work', role: 'worker', executor: 'external' }],
+  });
+  assert.equal(external.stages[0].executor, 'external');
+});
+
+test('rejects an unknown stage executor', () => {
+  const errors = errorsOf({
+    ...minimal,
+    stages: [{ id: 'work', role: 'worker', executor: 'script' }],
+  });
+  assert.match(picks(errors, '$.stages[0].executor')[0].message, /must be one of/);
+});
+
+test('provider lanes carry adapter, model and agent options', () => {
+  const definition = normalizeDefinition({
+    ...minimal,
+    providers: [{
+      id: 'lane-a',
+      adapter: 'deepseek',
+      model: 'deepseek-chat',
+      reasoningEffort: 'high',
+      maxTokens: 4096,
+      concurrency: 2,
+    }],
+    stages: [{ id: 'work', role: 'worker', providers: ['lane-a'] }],
+  });
+  assert.equal(definition.providers[0].adapter, 'deepseek');
+  assert.equal(definition.providers[0].model, 'deepseek-chat');
+  assert.equal(definition.providers[0].reasoningEffort, 'high');
+  assert.equal(definition.providers[0].maxTokens, 4096);
+  assert.match(describeDefinition(definition), /lane-a \(deepseek\/deepseek-chat\)/);
+});
