@@ -117,3 +117,25 @@ test('client renders the workflow DAG and its transitions', () => {
   assert.ok(SOURCE.includes('edge.label'));
   assert.ok(SOURCE.includes('needs_revision'));
 });
+
+test('buildGraph layers a branch, labels outcomes and routes a loop', () => {
+  const start = SOURCE.indexOf('function buildGraph');
+  const end = SOURCE.indexOf('function WorkflowGraph');
+  assert.ok(start > 0 && end > start);
+  const buildGraph = new Function(`${SOURCE.slice(start, end)}; return buildGraph;`)();
+  const graph = buildGraph({
+    entry: 'a',
+    stages: [
+      { id: 'a', title: 'A', role: 'worker', on: { complete: 'b' } },
+      { id: 'b', title: 'B', role: 'reviewer', on: { pass: 'c', needs_revision: 'b' } },
+      { id: 'c', title: 'C', role: 'releaser', on: {} },
+    ],
+    gates: [{ after: 'b', outcome: 'pass' }],
+  });
+  const a = graph.nodes.find(node => node.id === 'a');
+  const b = graph.nodes.find(node => node.id === 'b');
+  const c = graph.nodes.find(node => node.id === 'c');
+  assert.ok(a.y < b.y && b.y < c.y);
+  assert.ok(graph.edges.some(edge => edge.label === 'pass · gate'));
+  assert.ok(graph.edges.some(edge => edge.label === 'needs_revision'));
+});
