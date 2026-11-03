@@ -10,6 +10,7 @@
  */
 
 import './v2-runtime.test.mjs';
+import './v2-plugin.test.mjs';
 import './definition.test.mjs';
 import './store.test.mjs';
 import './lock.test.mjs';

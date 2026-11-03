@@ -144,15 +144,15 @@ async function executeToken(state, token, executors, now) {
     let result;
     if (node.type === 'agent') {
       if (!executors.agent) throw new RuntimeError('no_executor', 'no agent executor is mounted');
-      result = await executors.agent({ node, input, context: state.context, token, permissions: state.permissions });
+      result = await executors.agent({ node, input, context: state.context, token, definition: state.definition, permissions: state.permissions });
     } else if (node.type === 'command') {
       requirePermission(state.permissions.command, node.config.command, 'command');
       if (!executors.command) throw new RuntimeError('no_executor', 'no command executor is mounted');
-      result = await executors.command({ node, input, context: state.context, token });
+      result = await executors.command({ node, input, context: state.context, token, definition: state.definition });
     } else if (node.type === 'http') {
       requireHttpPermission(state.permissions.http, node.config.url);
       if (!executors.http) throw new RuntimeError('no_executor', 'no http executor is mounted');
-      result = await executors.http({ node, input, context: state.context, token });
+      result = await executors.http({ node, input, context: state.context, token, definition: state.definition });
     } else {
       throw new RuntimeError('unknown_node_type', `unsupported node type ${node.type}`);
     }
