@@ -139,3 +139,12 @@ test('buildGraph layers a branch, labels outcomes and routes a loop', () => {
   assert.ok(graph.edges.some(edge => edge.label === 'pass · gate'));
   assert.ok(graph.edges.some(edge => edge.label === 'needs_revision'));
 });
+
+test('panel exposes overview, filters, structured cards and feedback', () => {
+  assert.ok(SOURCE.includes('atw-progress'));
+  assert.ok(SOURCE.includes('atw-filter'));
+  assert.ok(SOURCE.includes('atw-banner'));
+  assert.ok(SOURCE.includes('atw-toast'));
+  assert.ok(SOURCE.includes('timeAgo'));
+  assert.ok(SOURCE.includes('detailRows'));
+});

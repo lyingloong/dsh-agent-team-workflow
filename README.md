@@ -145,9 +145,9 @@ conversation header, and the same tab is available in the right sidebar. The
 panel is React, not an iframe:
 
 - the tab is bound to the session that opened it; each session has its own workflow;
-- it renders the session workflow as a DAG: stages layered by dependency depth,
-  outcome labels and loops around the side, gate markers, plus a detail list;
-  clicking a graph node scrolls to that stage;
+- it renders the session workflow as a collapsible DAG: stages layered by
+  dependency depth, outcome labels and loops around the side, gate markers;
+  clicking a node filters the task list to that stage;
 - it reads and writes through same-origin
   `/plugins/dsh-agent-team-workflow/api/*` routes registered by the host plugin,
   so it works in the Electron and browser clients without CORS;

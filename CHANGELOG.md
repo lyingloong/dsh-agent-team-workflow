@@ -71,3 +71,17 @@ Initial release.
   Clicking a graph node scrolls to that stage's detail list.
 - Expose each stage's transitions (`on`) in the board projection so clients can
   draw the graph without parsing the definition.
+
+## 0.2.3
+
+- Redesign the embedded panel around an overview-first layout:
+  - hero with workflow description, segmented progress bar and status legend;
+  - collapsible workflow DAG with role stripes, status dots, outcome pills and
+    gate markers; graph clicks filter the task list (and collapsed mode keeps
+    stage shortcuts);
+  - status filter chips (all/active/pending decision/done);
+  - structured task cards: assignee avatar, task state, lane, priority and
+    relative update time; pending gates get an inline decision box;
+  - task details render known contract/result fields instead of raw JSON;
+  - toast feedback for gate decisions and enqueue, loading/empty/error states,
+    accessible labels and keyboard-operable graph nodes.
