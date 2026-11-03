@@ -66,3 +66,45 @@ test('client registers the right-sidebar tab and opens it from the conversation 
   assert.ok(SOURCE.includes('/plugins/dsh-agent-team-workflow/api'));
   assert.ok(SOURCE.includes('/board?workspace='));
 });
+
+test('apply registers the tab, the pane body and the header entry', () => {
+  const entry = loadBundle();
+  const module = entry.factory(name => {
+    if (name === 'react') return fakeReact();
+    throw new Error(`unexpected module ${name}`);
+  });
+  const captured = { tab: null, slots: [], opened: null };
+  const ctx = {
+    effect(fn) {
+      fn();
+    },
+    sidebarRightTabs: {
+      register(definition) {
+        captured.tab = definition;
+        return () => {};
+      },
+    },
+    slots: {
+      inject(_key, callback) {
+        callback();
+      },
+      register(definition, component) {
+        captured.slots.push({ definition, component });
+      },
+    },
+    get(name) {
+      if (name === 'sidebarRight') return { openTab: kind => { captured.opened = kind; } };
+      return undefined;
+    },
+  };
+  module.apply(ctx);
+  assert.equal(captured.tab.id, 'dsh-agent-team-workflow');
+  assert.equal(captured.tab.kind, 'team-workflow');
+  assert.equal(captured.tab.title(), '工作流');
+  const body = captured.slots.find(slot => slot.definition.name === 'sidebar.right.pane.tab');
+  assert.equal(body.definition.key, 'dsh-agent-team-workflow');
+  const header = captured.slots.find(slot => slot.definition.name === 'conversation.session.header.actions');
+  assert.equal(header.definition.id, 'team-workflow-open');
+  header.definition.inject().open();
+  assert.equal(captured.opened, 'team-workflow');
+});
