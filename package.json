@@ -1,27 +1,22 @@
 {
   "name": "dsh-agent-team-workflow",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "private": false,
-  "description": "DSH plugin for user-defined, resumable agent-team workflows with model-lane failover, gates and a local kanban board.",
+  "description": "DSH plugin for user-defined node-graph workflows: agent, command, HTTP, human, fan-out/join and subworkflow nodes with permissions, artifacts and a live run panel.",
   "type": "module",
   "license": "MIT",
   "engines": {
     "node": ">=22.5.0",
     "dsh": ">=0.2.1-rc.2"
   },
-  "bin": {
-    "agent-team-workflow": "./src/cli.mjs",
-    "atw": "./src/cli.mjs"
-  },
   "exports": {
-    ".": "./src/plugin.mjs",
-    "./engine": "./src/index.mjs",
+    ".": "./src/v2/plugin.mjs",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json",
     "./client": "./lib/client.js"
   },
   "files": [
-    "src",
+    "src/v2",
     "lib",
     "examples",
     "cordis.patch.yml",
@@ -33,14 +28,15 @@
     "test:runner": "node --test \"tests/*.test.mjs\"",
     "test:watch": "node --test --watch tests/"
   },
-  "main": "./src/plugin.mjs",
+  "main": "./src/v2/plugin.mjs",
   "keywords": [
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
-    "agent-teams",
     "workflow",
-    "kanban"
+    "node-graph",
+    "agent-teams",
+    "subagents"
   ],
   "dsh": {
     "bundle": {

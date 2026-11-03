@@ -1,24 +1,27 @@
 {
-  "apiVersion": 1,
+  "apiVersion": 2,
   "name": "minimal",
-  "description": "One worker, one stage. The smallest complete definition.",
-  "roles": [
+  "description": "One human seed and one agent node. No host permissions are needed.",
+  "entry": "seed",
+  "nodes": [
     {
-      "id": "worker",
-      "instances": 1,
-      "providers": ["local"]
+      "id": "seed",
+      "type": "human",
+      "title": "Seed",
+      "config": { "outcomes": ["approve", "reject"] }
+    },
+    {
+      "id": "write",
+      "type": "agent",
+      "title": "Write",
+      "role": "writer",
+      "inputs": { "request": "$input.request" },
+      "config": {
+        "prompt": "Turn the request into a concrete first draft."
+      }
     }
   ],
-  "providers": [
-    {
-      "id": "local",
-      "model": "any"
-    }
-  ],
-  "stages": [
-    {
-      "id": "work",
-      "role": "worker"
-    }
+  "edges": [
+    { "from": "seed", "to": "write", "on": "approve" }
   ]
 }

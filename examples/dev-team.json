@@ -1,87 +1,63 @@
 {
-  "apiVersion": 1,
+  "apiVersion": 2,
   "name": "dev-team",
-  "description": "需求 → 实现 → 审查 → 人工合并门。三条模型线路，每角色三人。",
-  "roles": [
-    {
-      "id": "analyst",
-      "instances": 3,
-      "providers": ["lane-a", "lane-b", "lane-c"]
-    },
-    {
-      "id": "engineer",
-      "instances": 3,
-      "providers": ["lane-a", "lane-b", "lane-c"]
-    },
-    {
-      "id": "reviewer",
-      "instances": 3,
-      "providers": ["lane-a", "lane-b", "lane-c"]
-    }
-  ],
+  "description": "Implement, test, review and merge. The command node needs a command permission grant; the review loop goes back to implementation.",
+  "entry": "seed",
   "providers": [
-    {
-      "id": "lane-a",
-      "model": "deepseek-flash",
-      "concurrency": 3,
-      "backoffMinutes": [10, 30, 60]
-    },
-    {
-      "id": "lane-b",
-      "model": "deepseek-flash",
-      "concurrency": 3,
-      "backoffMinutes": [10, 30, 60]
-    },
-    {
-      "id": "lane-c",
-      "model": "deepseek-flash",
-      "concurrency": 3,
-      "backoffMinutes": [10, 30, 60]
-    }
+    { "id": "default", "adapter": "deepseek", "model": "host-default" }
   ],
-  "stages": [
+  "nodes": [
     {
-      "id": "specify",
-      "title": "需求",
-      "role": "analyst",
-      "providers": ["lane-a", "lane-b", "lane-c"],
-      "on": { "complete": "implement" }
+      "id": "seed",
+      "type": "human",
+      "title": "Seed",
+      "config": { "outcomes": ["approve", "reject"] }
     },
     {
       "id": "implement",
-      "title": "实现",
+      "type": "agent",
+      "title": "Implement",
       "role": "engineer",
-      "providers": ["lane-a", "lane-b", "lane-c"],
-      "on": { "complete": "review" }
+      "inputs": { "request": "$input.request" },
+      "config": {
+        "lane": "default",
+        "prompt": "Implement the request in the current repository. Report changed files and any risks."
+      }
+    },
+    {
+      "id": "test",
+      "type": "command",
+      "title": "Test",
+      "config": { "command": "pnpm test", "timeoutMs": 300000 }
     },
     {
       "id": "review",
-      "title": "审查",
+      "type": "agent",
+      "title": "Review",
       "role": "reviewer",
-      "providers": ["lane-a", "lane-b", "lane-c"],
-      "options": ["pass", "needs_revision"],
-      "on": { "pass": "approved", "needs_revision": "implement" }
+      "inputs": {
+        "request": "$input.request",
+        "implementation": "$nodes.implement.output",
+        "tests": "$nodes.test.output"
+      },
+      "config": {
+        "lane": "default",
+        "outcomes": ["pass", "needs_revision"],
+        "prompt": "Review the implementation against the request. Use outcome pass only when no required change remains."
+      }
     },
     {
-      "id": "approved",
-      "title": "已合并",
-      "role": "reviewer"
-    }
-  ],
-  "gates": [
-    {
       "id": "merge",
-      "after": "review",
-      "outcome": "pass",
-      "kind": "manual",
-      "required": true
+      "type": "human",
+      "title": "Merge",
+      "config": { "outcomes": ["approve", "reject"] }
     }
   ],
-  "policies": {
-    "concurrency": { "global": 9 },
-    "provider": { "lowWatermarkPct": 15, "backoffMinutes": [10, 30, 60], "maxRetries": 3 },
-    "fallback": { "sameRole": true },
-    "retry": { "maxAttempts": 3, "backoffSeconds": [30, 120, 300] },
-    "review": { "maxRounds": 3 }
-  }
+  "edges": [
+    { "from": "seed", "to": "implement", "on": "approve" },
+    { "from": "implement", "to": "test", "on": "complete" },
+    { "from": "test", "to": "review", "on": "complete" },
+    { "from": "review", "to": "merge", "on": "pass" },
+    { "from": "review", "to": "implement", "on": "needs_revision" }
+  ]
 }

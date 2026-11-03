@@ -1,6 +1,31 @@
 # Changelog
 
+## 1.0.0
+
+The v2 node-graph runtime. This is an intentional breaking rewrite: the v1
+stage engine, kanban board, CLI, SQLite event log and stage definitions are
+removed. There is no compatibility layer or state migration.
+
+- Workflow definitions are `apiVersion: 2` node graphs: typed nodes, outcome
+  edges, provider lanes, `entry` and per-node inputs.
+- Node types: `agent`, `command`, `http`, `human`, `fanout`, `join`,
+  `subworkflow`.
+- Data plane: `$input`, `$nodes.<id>.output`, `$item`, `$index`, `$context`;
+  node outputs are stored in the run context.
+- Interactions: outcome edges, parallel branches, fan-out/join
+  (`all`/`any`/`quorum`), inline sub-workflows and human waits.
+- Permission grants for command/HTTP with `deny`/`allowlist`/`full`; default
+  deny; runtime enforcement; sub-workflows inherit the parent grant.
+- Five tools: `team_workflow_define`, `start`, `run`, `decide`, `status`.
+- Session JSON store (`workflow.json` + `runs/<runId>.json`) with atomic writes.
+- New right-sidebar node/run panel: graph, run status, token detail, human
+  decisions, permissions and context.
+- New session-scoped Web API: state/start/decide/run, behind the DSH Connection
+  authentication fence.
+- 21 v2 tests.
+
 ## 0.1.0
+
 
 Initial release.
 

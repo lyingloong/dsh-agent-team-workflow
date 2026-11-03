@@ -40,18 +40,23 @@ function fakeReact() {
   };
 }
 
-test('registers a client entry with the package identity', () => {
+function loadPluginFace() {
+  const entry = loadBundle();
+  const module = entry.factory(name => {
+    if (name === 'react') return fakeReact();
+    throw new Error(`unexpected module ${name}`);
+  });
+  return module;
+}
+
+test('registers a v2 client entry with the package identity', () => {
   const entry = loadBundle();
   assert.equal(entry.id, 'dsh-agent-team-workflow');
   assert.equal(typeof entry.factory, 'function');
 });
 
 test('client factory returns the Cordis plugin face', () => {
-  const entry = loadBundle();
-  const module = entry.factory(name => {
-    if (name === 'react') return fakeReact();
-    throw new Error(`unexpected module ${name}`);
-  });
+  const module = loadPluginFace();
   assert.equal(typeof module.apply, 'function');
   assert.deepEqual([...module.inject], ['slots', 'sidebarRightTabs']);
 });
@@ -64,16 +69,13 @@ test('client registers the right-sidebar tab and opens it from the conversation 
   assert.ok(SOURCE.includes('conversation.session.header.actions'));
   assert.ok(SOURCE.includes('openTab("team-workflow")'));
   assert.ok(SOURCE.includes('/plugins/dsh-agent-team-workflow/api'));
-  assert.ok(SOURCE.includes('/board?session='));
+  assert.ok(SOURCE.includes('/state?session='));
+  assert.ok(!SOURCE.includes('/board?session='));
   assert.ok(SOURCE.includes('sessionId'));
 });
 
 test('apply registers the tab, the pane body and the header entry', () => {
-  const entry = loadBundle();
-  const module = entry.factory(name => {
-    if (name === 'react') return fakeReact();
-    throw new Error(`unexpected module ${name}`);
-  });
+  const module = loadPluginFace();
   const captured = { tab: null, slots: [], opened: null };
   const ctx = {
     effect(fn) {
@@ -110,52 +112,42 @@ test('apply registers the tab, the pane body and the header entry', () => {
   assert.equal(captured.opened, 'team-workflow');
 });
 
-test('client renders the workflow DAG and its transitions', () => {
-  assert.ok(SOURCE.includes('function buildGraph'));
-  assert.ok(SOURCE.includes('function WorkflowGraph'));
-  assert.ok(SOURCE.includes('atw-graph-svg'));
-  assert.ok(SOURCE.includes('edge.label'));
-  assert.ok(SOURCE.includes('needs_revision'));
-});
-
-test('buildGraph layers a branch, labels outcomes and routes a loop', () => {
+test('buildGraph layers a v2 branch, labels outcomes and routes a loop', () => {
   const start = SOURCE.indexOf('function buildGraph');
   const end = SOURCE.indexOf('function WorkflowGraph');
   assert.ok(start > 0 && end > start);
   const buildGraph = new Function(`${SOURCE.slice(start, end)}; return buildGraph;`)();
   const graph = buildGraph({
     entry: 'a',
-    stages: [
-      { id: 'a', title: 'A', role: 'worker', on: { complete: 'b' } },
-      { id: 'b', title: 'B', role: 'reviewer', on: { pass: 'c', needs_revision: 'b' } },
-      { id: 'c', title: 'C', role: 'releaser', on: {} },
+    nodes: [
+      { id: 'a', title: 'A', type: 'human' },
+      { id: 'b', title: 'B', type: 'agent', role: 'reviewer' },
+      { id: 'c', title: 'C', type: 'command' },
     ],
-    gates: [{ after: 'b', outcome: 'pass' }],
+    edges: [
+      { from: 'a', to: 'b', on: 'approve' },
+      { from: 'b', to: 'c', on: 'pass' },
+      { from: 'b', to: 'b', on: 'needs_revision' },
+    ],
   });
   const a = graph.nodes.find(node => node.id === 'a');
   const b = graph.nodes.find(node => node.id === 'b');
   const c = graph.nodes.find(node => node.id === 'c');
   assert.ok(a.y < b.y && b.y < c.y);
-  assert.ok(graph.edges.some(edge => edge.label === 'pass · gate'));
+  assert.ok(graph.edges.some(edge => edge.label === 'approve'));
   assert.ok(graph.edges.some(edge => edge.label === 'needs_revision'));
+  assert.ok(graph.nodes.every(node => node.type && node.x !== undefined));
 });
 
-test('panel exposes overview, filters, structured cards and feedback', () => {
+test('panel exposes v2 run state, node details, decisions and permissions', () => {
+  assert.ok(SOURCE.includes('function WorkflowGraph'));
+  assert.ok(SOURCE.includes('atw-graph-svg'));
+  assert.ok(SOURCE.includes('edge.label'));
+  assert.ok(SOURCE.includes('run?.waiting'));
+  assert.ok(SOURCE.includes('run?.tokens'));
   assert.ok(!SOURCE.includes('atw-progress'));
-  assert.ok(SOURCE.includes('atw-stats'));
-  assert.ok(SOURCE.includes('durationSince'));
-  assert.ok(SOURCE.includes('maxWidth: "100%"'));
-  assert.ok(SOURCE.includes('atw-filter'));
   assert.ok(SOURCE.includes('atw-banner'));
-  assert.ok(SOURCE.includes('atw-toast'));
-  assert.ok(SOURCE.includes('timeAgo'));
-  assert.ok(SOURCE.includes('detailRows'));
-});
-
-test('graph affordances do not rely on instructional microcopy', () => {
-  assert.ok(!SOURCE.includes('点击节点筛选'));
-  assert.ok(!SOURCE.includes('atw-graph-hint'));
-  assert.ok(!SOURCE.includes('atw-graph-legend'));
-  assert.ok(SOURCE.includes('atw-executor'));
-  assert.ok(SOURCE.includes('maxWidth: "100%"'));
+  assert.ok(SOURCE.includes('atw-permissions'));
+  assert.ok(SOURCE.includes('atw-token'));
+  assert.ok(SOURCE.includes('command') && SOURCE.includes('http'));
 });

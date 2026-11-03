@@ -1,18 +1,14 @@
-# dsh-agent-team-workflow bundle patch: mounts the plugin into a DSH profile.
+# dsh-agent-team-workflow bundle patch: mounts the v2 node workflow runtime.
 #
 # Install with `dsh plugin --profile <name> add <package-or-local-path>`.
-# The plugin registers the `team_workflow_*` tools and one usage section into
-# the global system prompt, so any session in the profile can create and run a
-# workflow through natural language.
+# The plugin registers five team_workflow_* tools and one usage section.
+# State is per DSH session under <dataDir>/sessions/<sessionId>; dataDir
+# defaults to the platform user-data directory.
 - insert:
     - id: dsh-agent-team-workflow
       name: 'dsh-agent-team-workflow'
       config:
-        # State is per DSH session under <dataDir>/sessions/<sessionId>.
-        # dataDir defaults to the platform user-data directory.
-        # Board is loopback-only. If the port is busy the plugin falls back to
-        # an ephemeral port and reports the actual URL.
-        boardPort: 7171
-        autoBoard: true
-        # Subagent provider used by team_workflow_delegate.
+        # Subagent provider used by agent nodes.
         subagentProvider: spawn
+        # Maximum node executions per team_workflow_run / panel continue call.
+        maxSteps: 40
