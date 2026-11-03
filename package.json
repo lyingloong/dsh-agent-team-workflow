@@ -1,6 +1,6 @@
 {
   "name": "dsh-agent-team-workflow",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": false,
   "description": "DSH plugin for user-defined, resumable agent-team workflows with model-lane failover, gates and a local kanban board.",
   "type": "module",

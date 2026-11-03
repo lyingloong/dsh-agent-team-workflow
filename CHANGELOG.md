@@ -85,3 +85,13 @@ Initial release.
   - task details render known contract/result fields instead of raw JSON;
   - toast feedback for gate decisions and enqueue, loading/empty/error states,
     accessible labels and keyboard-operable graph nodes.
+
+## 0.2.4
+
+- Stop presenting a workflow as a batch with completion progress. The overview
+  now shows a continuous runtime: a live indicator, uptime since the workflow
+  definition, last activity, and workload stats (work items, in flight, pending
+  decisions, cumulative completed, concurrency). No percentage or progress bar.
+- Fix the DAG growing with the panel: the SVG keeps its intrinsic width, scales
+  down only when the pane is narrower (`max-width: 100%`) and stays centered.
+- Expose workflow `createdAt`/`updatedAt` in the board projection for uptime.

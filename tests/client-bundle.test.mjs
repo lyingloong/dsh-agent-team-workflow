@@ -141,7 +141,10 @@ test('buildGraph layers a branch, labels outcomes and routes a loop', () => {
 });
 
 test('panel exposes overview, filters, structured cards and feedback', () => {
-  assert.ok(SOURCE.includes('atw-progress'));
+  assert.ok(!SOURCE.includes('atw-progress'));
+  assert.ok(SOURCE.includes('atw-stats'));
+  assert.ok(SOURCE.includes('durationSince'));
+  assert.ok(SOURCE.includes('maxWidth: "100%"'));
   assert.ok(SOURCE.includes('atw-filter'));
   assert.ok(SOURCE.includes('atw-banner'));
   assert.ok(SOURCE.includes('atw-toast'));

@@ -78,6 +78,7 @@ test('builds columns, cards, gates and providers from the snapshot', (t) => {
   cleanupDir(t, dir);
   const board = buildBoardData({ snapshot: store.snapshot(), definition, now: '2026-01-01T00:00:00.000Z' });
   assert.equal(board.workflow.name, 'board-flow');
+  assert.equal(typeof board.workflow.createdAt, 'string');
   assert.deepEqual(board.workflow.stages.find(stage => stage.id === 'review').on, {
     pass: 'approved',
     needs_revision: 'implement',

@@ -110,6 +110,8 @@ export function buildBoardData({ snapshot, definition, now = new Date().toISOStr
       name: definition.name,
       description: definition.description,
       entry: definition.entry,
+      createdAt: snapshot.workflow?.createdAt ?? null,
+      updatedAt: snapshot.workflow?.updatedAt ?? null,
       stages: stageOrder(definition).map(stage => ({
         id: stage.id,
         title: stage.title ?? stage.id,
