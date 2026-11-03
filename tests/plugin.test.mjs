@@ -142,7 +142,7 @@ test('registers the workflow tools and one usage section', (t) => {
   const { tools, sections } = setup(t);
   assert.deepEqual([...tools.keys()].sort(), TOOL_NAMES);
   assert.equal(sections.length, 1);
-  assert.equal(sections[0].name, 'agent-team-workflow:usage');
+  assert.equal(sections[0].name, 'dsh-agent-team-workflow:usage');
   assert.match(sections[0].text, /team_workflow_define/);
   assert.match(sections[0].text, /Do not ask the user to write JSON/);
 });

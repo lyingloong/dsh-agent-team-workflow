@@ -1,8 +1,8 @@
-# agent-team-workflow
+# dsh-agent-team-workflow
 
 > A resumable, provider-aware workflow engine and kanban board for agent teams.
 
-`agent-team-workflow` turns "a bunch of coding agents" into a workflow you can
+`dsh-agent-team-workflow` turns "a bunch of coding agents" into a workflow you can
 trust over days: roles with capacity, a durable event log, model lanes with
 automatic failover, gates that record decisions instead of taking them, and a
 local board that shows the real projected state.
@@ -18,7 +18,7 @@ The 2026 tooling wave (Vibe Kanban, Conductor, Claude Squad, MulmoTerminal,
 agent-orchestrator, …) mostly solves *running* agents: parallel sessions,
 worktrees, diffs, a board. Those are the floor, not the differentiator.
 
-`agent-team-workflow` keeps the part that is hard to get right once a team runs
+`dsh-agent-team-workflow` keeps the part that is hard to get right once a team runs
 unattended:
 
 - **Every write is an event.** Projections rebuild from the log, so a crash
@@ -82,16 +82,16 @@ tools and the usage section):
 
 ```bash
 # from GitHub
-dsh plugin --profile desktop add github:lyingloong/agent-team-workflow
+dsh plugin --profile desktop add github:lyingloong/dsh-agent-team-workflow
 
 # or from a local checkout
-dsh plugin --profile desktop add /absolute/path/to/agent-team-workflow
+dsh plugin --profile desktop add /absolute/path/to/dsh-agent-team-workflow
 
 # restart that profile's Harness process, then refresh the Web GUI
 ```
 
 Published npm installs use the same plugin name:
-`dsh plugin --profile desktop add agent-team-workflow`.
+`dsh plugin --profile desktop add dsh-agent-team-workflow`.
 
 [cordis.patch.yml](cordis.patch.yml) mounts the plugin. In any session, describe
 the workflow in natural language:

@@ -21,3 +21,10 @@ Initial release.
   decision could previously be reported to the model as a tool error.
 - Add a host-like output-schema check to the plugin test harness so extra
   result fields fail in CI instead of at runtime.
+
+## 0.1.2
+
+- Rename the package and repository to `dsh-agent-team-workflow` to follow the
+  DSH plugin naming convention. Tool names (`team_workflow_*`), the CLI binaries
+  (`agent-team-workflow` / `atw`) and the per-workspace state directory
+  (`.agent-team-workflow`) are unchanged.

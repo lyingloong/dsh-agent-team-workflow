@@ -1,5 +1,5 @@
 /**
- * DSH host adapter for agent-team-workflow.
+ * DSH host adapter for dsh-agent-team-workflow.
  *
  * Registers the model-facing `team_workflow_*` tools and one usage section into
  * the host system prompt. The tools translate a user's natural-language team
@@ -26,7 +26,7 @@ import { dataPaths, ensureDataDir } from './paths.mjs';
 import { buildBoardData } from './board/data.mjs';
 import { startBoardServer } from './board/server.mjs';
 
-export const name = 'agent-team-workflow';
+export const name = 'dsh-agent-team-workflow';
 export const inject = ['tools', 'systemPrompt'];
 
 const DEFAULT_CONFIG = {
@@ -189,7 +189,7 @@ export function apply(ctx, config = {}) {
         try {
           boardUrl = (await boardFor(cwd, settings.boardPort, { restart: true })).url;
         } catch (error) {
-          logger.warn(`agent-team-workflow: board did not start: ${error.message}`);
+          logger.warn(`dsh-agent-team-workflow: board did not start: ${error.message}`);
         }
       }
       return {
@@ -237,12 +237,12 @@ export function apply(ctx, config = {}) {
 
   try {
     ctx.systemPrompt.section({
-      name: 'agent-team-workflow:usage',
+      name: 'dsh-agent-team-workflow:usage',
       order: settings.promptSectionOrder,
       text: USAGE,
     });
   } catch (error) {
-    logger.warn(`agent-team-workflow: could not install the usage section: ${error.message}`);
+    logger.warn(`dsh-agent-team-workflow: could not install the usage section: ${error.message}`);
   }
 
   // --- lifecycle -----------------------------------------------------------
@@ -257,7 +257,7 @@ export function apply(ctx, config = {}) {
         Promise.resolve(activation.dispose?.()).catch(() => {});
       }
       activations.clear();
-    }, 'agent-team-workflow: resources');
+    }, 'dsh-agent-team-workflow: resources');
   }
 }
 
@@ -802,7 +802,7 @@ function toolDelegate({ workspaceOf, settings, subagentsOf, activations, logger,
             providerError: inferProviderError(error.message),
           }));
         } catch (releaseError) {
-          logger.warn(`agent-team-workflow: could not release delegated attempt: ${releaseError.message}`);
+          logger.warn(`dsh-agent-team-workflow: could not release delegated attempt: ${releaseError.message}`);
         }
         throw error;
       }
@@ -843,7 +843,7 @@ function settleDelegation({ cwd, attemptId, outcome, result, withWorkspace, logg
       });
     });
   } catch (error) {
-    logger.warn(`agent-team-workflow: could not record delegated result: ${error.message}`);
+    logger.warn(`dsh-agent-team-workflow: could not record delegated result: ${error.message}`);
   }
 }
 
@@ -857,7 +857,7 @@ function settleFailure({ cwd, attemptId, error, withWorkspace, logger }) {
       providerError: inferProviderError(message),
     }));
   } catch (releaseError) {
-    logger.warn(`agent-team-workflow: could not record delegated failure: ${releaseError.message}`);
+    logger.warn(`dsh-agent-team-workflow: could not record delegated failure: ${releaseError.message}`);
   }
 }
 

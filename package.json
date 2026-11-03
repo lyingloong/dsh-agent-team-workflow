@@ -1,6 +1,6 @@
 {
-  "name": "agent-team-workflow",
-  "version": "0.1.1",
+  "name": "dsh-agent-team-workflow",
+  "version": "0.1.2",
   "private": false,
   "description": "DSH plugin for user-defined, resumable agent-team workflows with model-lane failover, gates and a local kanban board.",
   "type": "module",
@@ -47,11 +47,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lyingloong/agent-team-workflow.git"
+    "url": "git+https://github.com/lyingloong/dsh-agent-team-workflow.git"
   },
-  "homepage": "https://github.com/lyingloong/agent-team-workflow#readme",
+  "homepage": "https://github.com/lyingloong/dsh-agent-team-workflow#readme",
   "bugs": {
-    "url": "https://github.com/lyingloong/agent-team-workflow/issues"
+    "url": "https://github.com/lyingloong/dsh-agent-team-workflow/issues"
   },
   "publishConfig": {
     "access": "public"

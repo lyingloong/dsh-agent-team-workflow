@@ -1,12 +1,12 @@
-# agent-team-workflow bundle patch: mounts the plugin into a DSH profile.
+# dsh-agent-team-workflow bundle patch: mounts the plugin into a DSH profile.
 #
 # Install with `dsh plugin --profile <name> add <package-or-local-path>`.
 # The plugin registers the `team_workflow_*` tools and one usage section into
 # the global system prompt, so any session in the profile can create and run a
 # workflow through natural language.
 - insert:
-    - id: agent-team-workflow
-      name: 'agent-team-workflow'
+    - id: dsh-agent-team-workflow
+      name: 'dsh-agent-team-workflow'
       config:
         # Per-workspace state: <session cwd>/.agent-team-workflow
         stateDir: .agent-team-workflow
