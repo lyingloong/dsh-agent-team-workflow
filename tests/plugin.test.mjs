@@ -115,8 +115,8 @@ function assertOutputValue(schema, value, where) {
 function setup(t, { config = {}, subagents } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'team-workflow-plugin-'));
   const { ctx, tools, sections, cleanups } = makeCtx({ subagents });
-  apply(ctx, { stateDir: '.state', autoBoard: false, ...config });
-  const exec = { agent: { session: { header: { cwd: dir } } }, signal: new AbortController().signal };
+  apply(ctx, { dataDir: path.join(dir, '.data'), autoBoard: false, ...config });
+  const exec = { agent: { id: 'session-test', session: { header: { cwd: dir } } }, signal: new AbortController().signal };
   const call = async (name, args = {}) => {
     const tool = tools.get(name);
     const value = await tool.execute(args, exec);

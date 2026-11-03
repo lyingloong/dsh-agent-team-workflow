@@ -8,8 +8,8 @@
     - id: dsh-agent-team-workflow
       name: 'dsh-agent-team-workflow'
       config:
-        # Per-workspace state: <session cwd>/.agent-team-workflow
-        stateDir: .agent-team-workflow
+        # State is per DSH session under <dataDir>/sessions/<sessionId>.
+        # dataDir defaults to the platform user-data directory.
         # Board is loopback-only. If the port is busy the plugin falls back to
         # an ephemeral port and reports the actual URL.
         boardPort: 7171

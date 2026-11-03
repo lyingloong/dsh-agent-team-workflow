@@ -64,7 +64,8 @@ test('client registers the right-sidebar tab and opens it from the conversation 
   assert.ok(SOURCE.includes('conversation.session.header.actions'));
   assert.ok(SOURCE.includes('openTab("team-workflow")'));
   assert.ok(SOURCE.includes('/plugins/dsh-agent-team-workflow/api'));
-  assert.ok(SOURCE.includes('/board?workspace='));
+  assert.ok(SOURCE.includes('/board?session='));
+  assert.ok(SOURCE.includes('sessionId'));
 });
 
 test('apply registers the tab, the pane body and the header entry', () => {

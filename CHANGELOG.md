@@ -38,3 +38,21 @@ Initial release.
 - Host registers `/plugins/dsh-agent-team-workflow/api/workspaces|board|gate|enqueue`
   from the registered workspace list; arbitrary paths are rejected.
 - The standalone loopback board remains available for headless/CLI use.
+
+## 0.2.0
+
+- Workflow state is now **session-scoped** under
+  `<dataDir>/sessions/<sessionId>`, resolved from the DSH session id. Several
+  sessions opened in the same directory get independent workflows; no state is
+  written into the repository.
+- Config `stateDir` is replaced by `dataDir` (default: the platform user-data
+  directory). Existing workspace-local `.agent-team-workflow` state is not
+  migrated.
+- The embedded Web GUI panel is redesigned as a vertical node flow with a
+  progress header, pending-decision banner, node cards and lane health, closer
+  to the AgentTeams activity panel. The tab is session-scoped and receives its
+  session id from the sidebar slot; gate decisions and enqueue use the
+  session-scoped same-origin API.
+- Host routes are `/plugins/dsh-agent-team-workflow/api/board|gate|enqueue` with
+  a validated `session` parameter.
+- Added `examples/product-team.json` (five nodes, five roles, publish gate).

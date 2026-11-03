@@ -9,7 +9,9 @@ import { installWebApi } from '../src/web-api.mjs';
 import { Store } from '../src/store.mjs';
 import { Engine } from '../src/engine.mjs';
 import { normalizeDefinition } from '../src/definition.mjs';
+import { dataPaths } from '../src/paths.mjs';
 
+const SESSION = 'session-a';
 const WORKFLOW = {
   apiVersion: 1,
   name: 'web-api-flow',
@@ -19,8 +21,9 @@ const WORKFLOW = {
 
 function setup(t) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'team-workflow-api-'));
-  const stateDir = path.join(dir, '.state');
-  const store = Store.open(path.join(stateDir, 'agent-team-workflow.sqlite3'));
+  const dataRoot = path.join(dir, '.data');
+  const paths = dataPaths(path.join(dataRoot, 'sessions', SESSION));
+  const store = Store.open(paths.dbPath);
   store.append({
     type: 'workflow.defined',
     entity: 'workflow',
@@ -43,9 +46,6 @@ function setup(t) {
           },
         };
       }
-      if (name === 'workspaceRegistry') {
-        return { list: () => [{ path: dir, title: 'Demo Workspace' }] };
-      }
       return undefined;
     },
     effect(fn) {
@@ -53,9 +53,9 @@ function setup(t) {
     },
     on() {},
   };
-  installWebApi({ ctx, settings: { stateDir: '.state' }, logger: { warn() {} } });
+  installWebApi({ ctx, dataRoot, logger: { warn() {} } });
   t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 }));
-  return { dir, routes };
+  return { dir, dataRoot, routes };
 }
 
 function response() {
@@ -87,31 +87,22 @@ async function invoke(handler, { method = 'GET', url, body } = {}) {
   return { status: res.status, headers: res.headers, json: res.body === '' ? null : JSON.parse(res.body) };
 }
 
-test('registers the embedded API routes', (t) => {
+test('registers the embedded session API routes', (t) => {
   const { routes } = setup(t);
   assert.deepEqual([...routes.keys()].sort(), [
     '/plugins/dsh-agent-team-workflow/api/board',
     '/plugins/dsh-agent-team-workflow/api/enqueue',
     '/plugins/dsh-agent-team-workflow/api/gate',
-    '/plugins/dsh-agent-team-workflow/api/workspaces',
   ]);
 });
 
-test('lists registered workspaces and their workflow names', async (t) => {
-  const { dir, routes } = setup(t);
-  const result = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/workspaces'), {
-    url: '/plugins/dsh-agent-team-workflow/api/workspaces',
-  });
-  assert.equal(result.status, 200);
-  assert.deepEqual(result.json.workspaces, [{ path: dir, title: 'Demo Workspace', defined: true, name: 'web-api-flow' }]);
-});
-
-test('serves one workspace board projection', async (t) => {
-  const { dir, routes } = setup(t);
+test('serves one session board projection', async (t) => {
+  const { routes } = setup(t);
   const result = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/board'), {
-    url: `/plugins/dsh-agent-team-workflow/api/board?workspace=${encodeURIComponent(dir)}`,
+    url: `/plugins/dsh-agent-team-workflow/api/board?session=${SESSION}`,
   });
   assert.equal(result.status, 200);
+  assert.equal(result.json.session, SESSION);
   assert.equal(result.json.defined, true);
   assert.equal(result.json.board.workflow.name, 'web-api-flow');
   assert.equal(result.json.board.counts.items, 1);
@@ -119,29 +110,38 @@ test('serves one workspace board projection', async (t) => {
 });
 
 test('enqueues a task through the same-origin API', async (t) => {
-  const { dir, routes } = setup(t);
+  const { routes } = setup(t);
   const handler = routes.get('/plugins/dsh-agent-team-workflow/api/enqueue');
   const created = await invoke(handler, {
     method: 'POST',
     url: '/plugins/dsh-agent-team-workflow/api/enqueue',
-    body: { workspace: dir, title: 'from panel' },
+    body: { session: SESSION, title: 'from panel' },
   });
   assert.equal(created.status, 201);
   assert.ok(created.json.itemId);
 
   const board = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/board'), {
-    url: `/plugins/dsh-agent-team-workflow/api/board?workspace=${encodeURIComponent(dir)}`,
+    url: `/plugins/dsh-agent-team-workflow/api/board?session=${SESSION}`,
   });
   assert.equal(board.json.board.counts.items, 2);
 });
 
-test('rejects an unregistered workspace path', async (t) => {
+test('rejects an unsafe session id', async (t) => {
   const { routes } = setup(t);
   const result = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/board'), {
-    url: '/plugins/dsh-agent-team-workflow/api/board?workspace=C%3A%2Fnot-registered',
+    url: '/plugins/dsh-agent-team-workflow/api/board?session=..%2Fescape',
   });
-  assert.equal(result.status, 404);
-  assert.equal(result.json.error.code, 'workspace_not_found');
+  assert.equal(result.status, 400);
+  assert.equal(result.json.error.code, 'invalid_session');
+});
+
+test('a session without a workflow reads as undefined', async (t) => {
+  const { routes } = setup(t);
+  const result = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/board'), {
+    url: '/plugins/dsh-agent-team-workflow/api/board?session=session-empty',
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.json.defined, false);
 });
 
 test('ignores a host without a web server', () => {
@@ -154,5 +154,5 @@ test('ignores a host without a web server', () => {
     },
     on() {},
   };
-  assert.doesNotThrow(() => installWebApi({ ctx, settings: { stateDir: '.state' }, logger: { warn() {} } }));
+  assert.doesNotThrow(() => installWebApi({ ctx, dataRoot: os.tmpdir(), logger: { warn() {} } }));
 });

@@ -104,7 +104,7 @@ it enqueue work and delegate tasks.
 
 | Tool | Purpose |
 | --- | --- |
-| `team_workflow_define` | Create or replace the workspace workflow from JSON the model composes. |
+| `team_workflow_define` | Create or replace the session workflow from JSON the model composes. |
 | `team_workflow_status` | Projected counts, stage columns, lane health, pending gates, board URL. |
 | `team_workflow_board` | Start (or return) the local board. |
 | `team_workflow_enqueue` | Create an item at the entry stage. |
@@ -125,16 +125,16 @@ Configuration (profile patch):
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `stateDir` | `.agent-team-workflow` | Per-workspace state directory (relative to the session cwd). |
+| `dataDir` | platform user-data dir | Root for per-session state: `<dataDir>/sessions/<sessionId>`. |
 | `boardPort` | `7171` | Board port; falls back to an ephemeral port when busy. |
 | `autoBoard` | `true` | Start/restart the board after `team_workflow_define`. |
 | `subagentProvider` | `spawn` | Subagent provider used by `team_workflow_delegate`. |
 
-The board and CLI read the same workspace directory:
+The standalone board and CLI read one session directory explicitly:
 
 ```bash
-atw board --data .agent-team-workflow
-atw status --data .agent-team-workflow
+atw board --data "$LOCALAPPDATA/agent-team-workflow/sessions/<session-id>"
+atw status --data "$LOCALAPPDATA/agent-team-workflow/sessions/<session-id>"
 ```
 
 ## Embedded panel
@@ -144,18 +144,19 @@ Installing the bundle also registers a native Web GUI panel (`dsh.client`,
 conversation header, and the same tab is available in the right sidebar. The
 panel is React, not an iframe:
 
-- it lists the host's registered workspaces and remembers the selected one;
-- it renders the same stage columns, cards, lane health, pending gates and
-  enqueue box as the standalone board;
+- the tab is bound to the session that opened it; each session has its own workflow;
+- it renders the session workflow as a vertical node flow with progress, cards,
+  lane health, pending gates and an enqueue box;
 - it reads and writes through same-origin
   `/plugins/dsh-agent-team-workflow/api/*` routes registered by the host plugin,
   so it works in the Electron and browser clients without CORS;
 - approving/rejecting a gate and adding a task call the same engine paths as the
   tools. It never merges, closes or pushes.
 
-The workflow still belongs to one workspace (`<workspace>/.agent-team-workflow`);
-the panel's workspace selector only switches which workspace it displays. A
-workspace with no workflow shows an empty state instead of creating one.
+Workflow state is session-scoped under
+`<dataDir>/sessions/<sessionId>`. Two sessions opened in the same directory get
+independent workflows. A session with no workflow shows an empty state instead
+of creating one.
 
 The standalone board below remains for headless/CLI use.
 
@@ -303,12 +304,13 @@ Each role may list several providers, and a stage may narrow that pool:
 
 ## State location
 
-Default: `%LOCALAPPDATA%\agent-team-workflow` (Windows),
+Default root: `%LOCALAPPDATA%\agent-team-workflow` (Windows),
 `~/Library/Application Support/agent-team-workflow` (macOS),
 `$XDG_DATA_HOME/agent-team-workflow` or `~/.local/share/agent-team-workflow`
-(Linux). Override with `--data DIR` or `AGENT_TEAM_WORKFLOW_DATA`. A
-repository-local `.agent-team-workflow/` is reserved for exports; it is never
-the source of truth.
+(Linux). Every DSH session stores its workflow under
+`sessions/<sessionId>`; the tools resolve the session automatically. Override the
+root with `dataDir` or `AGENT_TEAM_WORKFLOW_DATA`. The standalone CLI takes
+`--data DIR` pointing at one session directory.
 
 ## Roadmap
 

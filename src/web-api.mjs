@@ -1,14 +1,12 @@
 /**
  * Same-origin Web API for the embedded workflow panel.
  *
- * The Web GUI client panel cannot read the plugin's loopback board server
- * cross-origin, so the host registers these routes on the GUI's own web server.
- * Every route is read-only except gate decisions and enqueue; they use the same
- * engine and event log as the tools.
+ * Workflow state is session-scoped: one state directory per DSH Session under
+ * `<data-root>/sessions/<sessionId>`. A directory can host many sessions, so a
+ * project can have several workflows without them colliding.
  *
- * Workspace scoping is deliberate: a workflow belongs to one registered
- * workspace (`<workspace>/.agent-team-workflow`). Arbitrary paths are rejected,
- * and the only writable roots are the ones the host already knows about.
+ * The panel receives its session id from the session-scoped sidebar slot and
+ * passes it to these routes. Arbitrary path segments are rejected.
  */
 
 import path from 'node:path';
@@ -22,14 +20,17 @@ import { buildBoardData } from './board/data.mjs';
 
 export const ROUTE_PREFIX = '/plugins/dsh-agent-team-workflow';
 const MAX_BODY_BYTES = 64 * 1024;
+const SESSION_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
 
 /**
  * Install the API routes on the host web server. Safe in a headless profile:
  * when no web server service exists the call is a no-op and later service
  * binding retries.
  */
-export function installWebApi({ ctx, settings, logger = console }) {
+export function installWebApi({ ctx, dataRoot, logger = console }) {
+  const root = path.resolve(dataRoot);
   const routes = new Map();
+
   const guard = handler => async (req, res) => {
     try {
       await handler(req, res);
@@ -48,22 +49,15 @@ export function installWebApi({ ctx, settings, logger = console }) {
   };
   const route = (suffix, handler) => routes.set(`${ROUTE_PREFIX}${suffix}`, guard(handler));
 
-  const workspaceRoots = () => {
-    const registry = ctx.get?.('workspaceRegistry') ?? ctx.get?.('workspace');
-    if (!registry || typeof registry.list !== 'function') return [];
-    return registry.list().map(workspace => ({
-      path: path.resolve(String(workspace.path)),
-      title: typeof workspace.title === 'string' && workspace.title !== '' ? workspace.title : String(workspace.path),
-    })).filter(workspace => workspace.path !== '');
+  const stateDir = session => {
+    if (typeof session !== 'string' || !SESSION_PATTERN.test(session)) {
+      throw Object.assign(new Error('session must be a safe session id'), { code: 'invalid_session' });
+    }
+    return path.join(root, 'sessions', session);
   };
 
-  const stateDirOf = root => path.resolve(root, settings.stateDir);
-
-  const stateExists = root => existsSync(dataPaths(stateDirOf(root)).dbPath);
-
-  const openState = root => {
-    const dataDir = stateDirOf(root);
-    const paths = dataPaths(dataDir);
+  const openState = dir => {
+    const paths = dataPaths(dir);
     if (!existsSync(paths.dbPath)) return null;
     const store = Store.open(paths.dbPath);
     try {
@@ -85,51 +79,17 @@ export function installWebApi({ ctx, settings, logger = console }) {
     }
   };
 
-  const selectRoot = raw => {
-    const roots = workspaceRoots();
-    if (roots.length === 0) return null;
-    if (raw !== null && raw !== undefined && raw !== '') {
-      const resolved = path.resolve(String(raw));
-      return roots.find(workspace => workspace.path === resolved) ?? null;
-    }
-    return roots.find(workspace => stateExists(workspace.path)) ?? roots[0];
-  };
-
-  route('/api/workspaces', async (req, res) => {
-    const workspaces = workspaceRoots().map(workspace => {
-      let defined = false;
-      let name = null;
-      if (stateExists(workspace.path)) {
-        try {
-          const state = openState(workspace.path);
-          defined = state !== null;
-          name = state?.definition.name ?? null;
-          state?.store.close();
-        } catch (error) {
-          logger.warn(`dsh-agent-team-workflow: workspace state unreadable at ${workspace.path}: ${error.message}`);
-        }
-      }
-      return { path: workspace.path, title: workspace.title, defined, name };
-    });
-    sendJson(res, 200, { workspaces });
-  });
-
   route('/api/board', async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://local');
-    const root = selectRoot(url.searchParams.get('workspace'));
-    if (!root) {
-      sendJson(res, 404, { error: { code: 'workspace_not_found', message: 'no registered workspace matches the request' } });
-      return;
-    }
-    const state = openState(root.path);
+    const session = url.searchParams.get('session');
+    const state = openState(stateDir(session));
     if (!state) {
-      sendJson(res, 200, { workspace: root.path, title: root.title, defined: false });
+      sendJson(res, 200, { session, defined: false });
       return;
     }
     try {
       sendJson(res, 200, {
-        workspace: root.path,
-        title: root.title,
+        session,
         defined: true,
         board: buildBoardData({ snapshot: state.snapshot, definition: state.definition }),
       });
@@ -140,10 +100,8 @@ export function installWebApi({ ctx, settings, logger = console }) {
 
   route('/api/gate', async (req, res) => {
     const body = await readJson(req);
-    const root = selectRoot(body.workspace);
-    if (!root) return sendJson(res, 404, { error: { code: 'workspace_not_found', message: 'no registered workspace matches the request' } });
-    const state = openState(root.path);
-    if (!state) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'this workspace has no workflow yet' } });
+    const state = openState(stateDir(body.session));
+    if (!state) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'this session has no workflow yet' } });
     try {
       const result = state.engine.decideGate({
         itemId: requireString(body.itemId, 'itemId'),
@@ -160,10 +118,8 @@ export function installWebApi({ ctx, settings, logger = console }) {
 
   route('/api/enqueue', async (req, res) => {
     const body = await readJson(req);
-    const root = selectRoot(body.workspace);
-    if (!root) return sendJson(res, 404, { error: { code: 'workspace_not_found', message: 'no registered workspace matches the request' } });
-    const state = openState(root.path);
-    if (!state) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'this workspace has no workflow yet' } });
+    const state = openState(stateDir(body.session));
+    if (!state) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'this session has no workflow yet' } });
     try {
       const result = state.engine.enqueue({
         title: requireString(body.title, 'title'),
@@ -205,13 +161,12 @@ export function installWebApi({ ctx, settings, logger = console }) {
 }
 
 function sendJson(res, status, value) {
-  const body = JSON.stringify(value);
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
   });
-  res.end(body);
+  res.end(JSON.stringify(value));
 }
 
 function readJson(req) {

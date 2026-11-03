@@ -22,7 +22,7 @@ import { DefinitionError, describeDefinition, normalizeDefinition } from './defi
 import { Engine, inferProviderError } from './engine.mjs';
 import { Store } from './store.mjs';
 import { acquireLock } from './lock.mjs';
-import { dataPaths, ensureDataDir } from './paths.mjs';
+import { dataPaths, defaultDataDir, ensureDataDir } from './paths.mjs';
 import { buildBoardData } from './board/data.mjs';
 import { startBoardServer } from './board/server.mjs';
 import { installWebApi } from './web-api.mjs';
@@ -31,14 +31,14 @@ export const name = 'dsh-agent-team-workflow';
 export const inject = ['tools', 'systemPrompt'];
 
 const DEFAULT_CONFIG = {
-  stateDir: '.agent-team-workflow',
+  dataDir: null,
   boardPort: 7171,
   autoBoard: true,
   subagentProvider: 'spawn',
   promptSectionOrder: 118,
 };
 
-const USAGE = `Agent Team Workflow provides a user-defined, resumable workflow for this workspace.
+const USAGE = `Agent Team Workflow provides a user-defined, resumable workflow for this DSH session.
 
 When the user describes a team or an automated workflow in natural language ("创建一个自动开发的工作流，一个人负责需求，一个人负责实现，一个人负责审查"), translate it into a workflow definition and call team_workflow_define. Do not ask the user to write JSON.
 
@@ -76,15 +76,16 @@ export function apply(ctx, config = {}) {
   const logger = ctx.logger ?? { warn() {}, info() {} };
   const subagentsOf = () => (typeof ctx.get === 'function' ? ctx.get('subagents') : ctx.subagents);
 
-  const workspaceOf = exec => {
-    const cwd = exec?.agent?.session?.header?.cwd;
-    return typeof cwd === 'string' && cwd !== '' ? cwd : process.cwd();
+  const sessionIdOf = exec => {
+    const id = exec?.agent?.id ?? exec?.agent?.session?.header?.id;
+    return typeof id === 'string' && id !== '' ? id : 'local';
   };
 
-  const stateDirOf = cwd => path.resolve(cwd, settings.stateDir);
+  const dataRoot = path.resolve(settings.dataDir ?? defaultDataDir());
+  const stateDirOf = sessionId => path.join(dataRoot, 'sessions', sessionId);
 
-  function openWorkspace(cwd) {
-    const dataDir = stateDirOf(cwd);
+  function openSession(sessionId) {
+    const dataDir = stateDirOf(sessionId);
     const paths = dataPaths(dataDir);
     if (!existsSync(paths.dbPath)) {
       throw new Error(`no workflow is defined in ${dataDir}; call team_workflow_define first`);
@@ -104,17 +105,17 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  function withWorkspace(cwd, fn) {
-    const workspace = openWorkspace(cwd);
+  function withSession(sessionId, fn) {
+    const session = openSession(sessionId);
     try {
-      return fn(workspace);
+      return fn(session);
     } finally {
-      workspace.store.close();
+      session.store.close();
     }
   }
 
-  async function boardFor(cwd, port = settings.boardPort, { restart = false } = {}) {
-    const dataDir = stateDirOf(cwd);
+  async function boardFor(session, port = settings.boardPort, { restart = false } = {}) {
+    const dataDir = stateDirOf(session);
     const existing = boards.get(dataDir);
     if (existing && !restart) {
       return { url: await existing.ready, alreadyRunning: true };
@@ -147,11 +148,11 @@ export function apply(ctx, config = {}) {
   // --- tools ---------------------------------------------------------------
 
   register(toolDefine({
-    workspaceOf,
+    sessionIdOf,
     logger,
     settings,
     define: async (exec, rawDefinition) => {
-      const cwd = workspaceOf(exec);
+      const session = sessionIdOf(exec);
       let raw = rawDefinition;
       if (typeof raw === 'string') {
         try {
@@ -167,7 +168,7 @@ export function apply(ctx, config = {}) {
         if (error instanceof DefinitionError) return { ok: false, errors: error.errors };
         throw error;
       }
-      const paths = ensureDataDir(stateDirOf(cwd));
+      const paths = ensureDataDir(stateDirOf(session));
       const lock = acquireLock({ dataDir: paths.dataDir });
       try {
         const store = Store.open(paths.dbPath);
@@ -188,7 +189,7 @@ export function apply(ctx, config = {}) {
       let boardUrl;
       if (settings.autoBoard) {
         try {
-          boardUrl = (await boardFor(cwd, settings.boardPort, { restart: true })).url;
+          boardUrl = (await boardFor(session, settings.boardPort, { restart: true })).url;
         } catch (error) {
           logger.warn(`dsh-agent-team-workflow: board did not start: ${error.message}`);
         }
@@ -204,34 +205,34 @@ export function apply(ctx, config = {}) {
   }));
 
   register(toolStatus({
-    workspaceOf,
+    sessionIdOf,
     stateDirOf,
     boards,
-    openWorkspace,
-    withWorkspace,
+    openSession,
+    withSession,
   }));
 
   register(toolBoard({
-    workspaceOf,
+    sessionIdOf,
     settings,
     boardFor,
-    withWorkspace,
+    withSession,
   }));
 
-  register(toolEnqueue({ workspaceOf, withWorkspace }));
-  register(toolGate({ workspaceOf, withWorkspace }));
-  register(toolClaim({ workspaceOf, withWorkspace }));
-  register(toolComplete({ workspaceOf, withWorkspace }));
-  register(toolFail({ workspaceOf, withWorkspace }));
-  register(toolPlan({ workspaceOf, withWorkspace }));
+  register(toolEnqueue({ sessionIdOf, withSession }));
+  register(toolGate({ sessionIdOf, withSession }));
+  register(toolClaim({ sessionIdOf, withSession }));
+  register(toolComplete({ sessionIdOf, withSession }));
+  register(toolFail({ sessionIdOf, withSession }));
+  register(toolPlan({ sessionIdOf, withSession }));
 
   register(toolDelegate({
-    workspaceOf,
+    sessionIdOf,
     settings,
     subagentsOf,
     activations,
     logger,
-    withWorkspace,
+    withSession,
   }));
 
   // --- usage section -------------------------------------------------------
@@ -250,7 +251,7 @@ export function apply(ctx, config = {}) {
 
   // Routes are optional: a headless profile has no web server, and the tools
   // keep working. Service binding retries when the Web composition lands.
-  installWebApi({ ctx, settings, logger });
+  installWebApi({ ctx, dataRoot, logger });
 
   // --- lifecycle -----------------------------------------------------------
 
@@ -270,10 +271,10 @@ export function apply(ctx, config = {}) {
 
 // --- tool definitions ------------------------------------------------------
 
-function toolDefine({ workspaceOf, logger, settings, define }) {
+function toolDefine({ sessionIdOf, logger, settings, define }) {
   return {
     name: 'team_workflow_define',
-    description: 'Create or replace this workspace\'s workflow definition from a complete JSON definition. Use this when the user describes a team or automated workflow in natural language: translate their description into roles, stages, gates and provider lanes, then pass the whole definition. Validation errors are returned with JSON paths so you can fix them. Auto-starts the local board unless the host disabled it.',
+    description: 'Create or replace the session workflow definition from a complete JSON definition. Use this when the user describes a team or automated workflow in natural language: translate their description into roles, stages, gates and provider lanes, then pass the whole definition. Validation errors are returned with JSON paths so you can fix them. Auto-starts the local board unless the host disabled it.',
     parameters: objectSchema({
       definition: freeObject('Complete workflow definition JSON. See the usage section for the schema.'),
     }, ['definition']),
@@ -311,7 +312,7 @@ function toolDefine({ workspaceOf, logger, settings, define }) {
   };
 }
 
-function toolStatus({ workspaceOf, boards, withWorkspace }) {
+function toolStatus({ sessionIdOf, boards, withSession }) {
   return {
     name: 'team_workflow_status',
     description: 'Show the workflow\'s projected state: counts, stage columns, provider lane health, pending gates and the board URL. Use it after defining or after delegating work.',
@@ -364,13 +365,13 @@ function toolStatus({ workspaceOf, boards, withWorkspace }) {
               ...(value.pendingGates?.length ? [`pending decisions: ${value.pendingGates.map(gate => `${gate.itemTitle}/${gate.gate}`).join(', ')}`] : []),
               ...(value.boardUrl ? [`board: ${value.boardUrl}`] : []),
             ].join('\n')
-          : 'No workflow defined in this workspace yet. Call team_workflow_define.',
+          : 'No workflow defined in this session yet. Call team_workflow_define.',
       }],
     },
     async execute(_args, exec) {
-      const cwd = workspaceOf(exec);
+      const session = sessionIdOf(exec);
       try {
-        return withWorkspace(cwd, ({ store, definition, paths }) => {
+        return withSession(session, ({ store, definition, paths }) => {
           const board = boards.get(paths.dataDir);
           const data = buildBoardData({ snapshot: store.snapshot(), definition });
           return {
@@ -408,10 +409,10 @@ function toolStatus({ workspaceOf, boards, withWorkspace }) {
   };
 }
 
-function toolBoard({ workspaceOf, boardFor, withWorkspace }) {
+function toolBoard({ sessionIdOf, boardFor, withSession }) {
   return {
     name: 'team_workflow_board',
-    description: 'Start (or return) the local kanban board for this workspace and return its URL. The board is loopback-only and can approve/reject gates; it never merges or closes anything.',
+    description: 'Start (or return) the local kanban board for this session and return its URL. The board is loopback-only and can approve/reject gates; it never merges or closes anything.',
     parameters: objectSchema({
       port: integerSchema('Optional explicit port; defaults to the configured port, then an ephemeral port if that one is busy.'),
     }),
@@ -423,17 +424,17 @@ function toolBoard({ workspaceOf, boardFor, withWorkspace }) {
       render: (_args, value) => [{ type: 'text', text: `Board: ${value.url}` }],
     },
     async execute(args, exec) {
-      const cwd = workspaceOf(exec);
+      const session = sessionIdOf(exec);
       const port = Number.isInteger(args?.port) && args.port >= 0 ? args.port : undefined;
       // Surface the actionable "define first" error instead of a board boot failure.
-      withWorkspace(cwd, () => undefined);
-      const result = await boardFor(cwd, port);
+      withSession(session, () => undefined);
+      const result = await boardFor(session, port);
       return { url: result.url, alreadyRunning: result.alreadyRunning };
     },
   };
 }
 
-function toolEnqueue({ workspaceOf, withWorkspace }) {
+function toolEnqueue({ sessionIdOf, withSession }) {
   return {
     name: 'team_workflow_enqueue',
     description: 'Create one item at the workflow entry stage. The item immediately becomes a ready task for the entry role. Only enqueue work the user asked for.',
@@ -456,13 +457,13 @@ function toolEnqueue({ workspaceOf, withWorkspace }) {
       if (typeof input !== 'object' || input === null || Array.isArray(input)) throw new Error('input must be a JSON object');
       const priority = args?.priority ?? 0;
       if (!Number.isInteger(priority)) throw new Error('priority must be an integer');
-      const cwd = workspaceOf(exec);
-      return withWorkspace(cwd, ({ engine }) => engine.enqueue({ title, data: input, priority }));
+      const session = sessionIdOf(exec);
+      return withSession(session, ({ engine }) => engine.enqueue({ title, data: input, priority }));
     },
   };
 }
 
-function toolGate({ workspaceOf, withWorkspace }) {
+function toolGate({ sessionIdOf, withSession }) {
   return {
     name: 'team_workflow_gate',
     description: 'Approve or reject one pending gate. This records the decision and advances (approve) or blocks (reject) the item. It never merges, closes or pushes.',
@@ -486,8 +487,8 @@ function toolGate({ workspaceOf, withWorkspace }) {
       }],
     },
     async execute(args, exec) {
-      const cwd = workspaceOf(exec);
-      const decided = withWorkspace(cwd, ({ engine }) => engine.decideGate({
+      const session = sessionIdOf(exec);
+      const decided = withSession(session, ({ engine }) => engine.decideGate({
         itemId: requireString(args?.itemId, 'itemId'),
         gate: requireString(args?.gate, 'gate'),
         decision: requireString(args?.decision, 'decision'),
@@ -505,7 +506,7 @@ function toolGate({ workspaceOf, withWorkspace }) {
   };
 }
 
-function toolClaim({ workspaceOf, withWorkspace }) {
+function toolClaim({ sessionIdOf, withSession }) {
   return {
     name: 'team_workflow_claim',
     description: 'Claim the next ready task for a role. Returns the task contract and an attempt id; only that attempt can complete or fail it. The engine enforces role, member, global and lane capacity. Use this from a worker session that is not delegated by team_workflow_delegate.',
@@ -536,8 +537,8 @@ function toolClaim({ workspaceOf, withWorkspace }) {
       const role = requireString(args?.role, 'role');
       const member = args?.member === undefined ? `${role}-dsh` : requireString(args.member, 'member');
       const provider = args?.provider === undefined ? null : requireString(args.provider, 'provider');
-      const cwd = workspaceOf(exec);
-      return withWorkspace(cwd, ({ engine }) => {
+      const session = sessionIdOf(exec);
+      return withSession(session, ({ engine }) => {
         const claimed = engine.claim({ role, member, provider });
         if (!claimed) return { claimed: false };
         return {
@@ -555,7 +556,7 @@ function toolClaim({ workspaceOf, withWorkspace }) {
   };
 }
 
-function toolComplete({ workspaceOf, withWorkspace }) {
+function toolComplete({ sessionIdOf, withSession }) {
   return {
     name: 'team_workflow_complete',
     description: 'Complete a claimed attempt with one of its stage\'s declared outcomes. This records the result, and either advances the item (creating the next task), pauses it on a gate, or finishes it. Repeating the same call is a no-op.',
@@ -584,8 +585,8 @@ function toolComplete({ workspaceOf, withWorkspace }) {
       }],
     },
     async execute(args, exec) {
-      const cwd = workspaceOf(exec);
-      const completed = withWorkspace(cwd, ({ engine }) => engine.complete({
+      const session = sessionIdOf(exec);
+      const completed = withSession(session, ({ engine }) => engine.complete({
         attemptId: requireString(args?.attemptId, 'attemptId'),
         outcome: args?.outcome === undefined ? 'complete' : requireString(args.outcome, 'outcome'),
         result: args?.result ?? {},
@@ -603,7 +604,7 @@ function toolComplete({ workspaceOf, withWorkspace }) {
   };
 }
 
-function toolFail({ workspaceOf, withWorkspace }) {
+function toolFail({ sessionIdOf, withSession }) {
   return {
     name: 'team_workflow_fail',
     description: 'Report a failed attempt. A provider-class failure (quota, 429, rate limit, timeout) parks that lane for its backoff and releases the task for another lane; other failures retry with the policy backoff until the attempt budget is exhausted, then block the item.',
@@ -632,8 +633,8 @@ function toolFail({ workspaceOf, withWorkspace }) {
       }],
     },
     async execute(args, exec) {
-      const cwd = workspaceOf(exec);
-      const failed = withWorkspace(cwd, ({ engine }) => engine.fail({
+      const session = sessionIdOf(exec);
+      const failed = withSession(session, ({ engine }) => engine.fail({
         attemptId: requireString(args?.attemptId, 'attemptId'),
         error: typeof args?.error === 'string' ? args.error : '',
         providerError: args?.providerError === true,
@@ -651,7 +652,7 @@ function toolFail({ workspaceOf, withWorkspace }) {
   };
 }
 
-function toolPlan({ workspaceOf, withWorkspace }) {
+function toolPlan({ sessionIdOf, withSession }) {
   return {
     name: 'team_workflow_plan',
     description: 'List ready tasks (role, stage, item and outcome count) and pending gates. Use it to decide which task to delegate next. It is read-only.',
@@ -689,8 +690,8 @@ function toolPlan({ workspaceOf, withWorkspace }) {
       }],
     },
     async execute(_args, exec) {
-      const cwd = workspaceOf(exec);
-      return withWorkspace(cwd, ({ store, definition }) => {
+      const session = sessionIdOf(exec);
+      return withSession(session, ({ store, definition }) => {
         const now = new Date().toISOString();
         const rows = store.db.prepare(`
           SELECT t.id, t.item_id, t.role, t.stage, i.title
@@ -724,7 +725,7 @@ function toolPlan({ workspaceOf, withWorkspace }) {
   };
 }
 
-function toolDelegate({ workspaceOf, settings, subagentsOf, activations, logger, withWorkspace }) {
+function toolDelegate({ sessionIdOf, settings, subagentsOf, activations, logger, withSession }) {
   return {
     name: 'team_workflow_delegate',
     description: 'Claim one ready task whose stage has exactly one outcome, spawn a subagent to do the work, and record completion or failure when it settles. Returns immediately; use team_workflow_status to observe progress. Requires a host subagent provider.',
@@ -757,13 +758,14 @@ function toolDelegate({ workspaceOf, settings, subagentsOf, activations, logger,
       const role = requireString(args?.role, 'role');
       const member = args?.member === undefined ? `${role}-agent` : requireString(args.member, 'member');
       const provider = args?.provider === undefined ? null : requireString(args.provider, 'provider');
-      const cwd = workspaceOf(exec);
+      const session = sessionIdOf(exec);
+      const cwd = exec?.agent?.session?.header?.cwd ?? process.cwd();
 
       let claimed;
       let outcome;
       let definitionName;
       try {
-        const opened = withWorkspace(cwd, ({ engine, definition }) => {
+        const opened = withSession(session, ({ engine, definition }) => {
           const peeked = engine.peek({ role });
           if (!peeked) return { reason: 'no ready task for that role' };
           const stage = definition.stages.find(candidate => candidate.id === peeked.stage);
@@ -802,7 +804,7 @@ function toolDelegate({ workspaceOf, settings, subagentsOf, activations, logger,
         // The task is already running; release it so this attempt does not hold
         // a slot until the lease expires.
         try {
-          withWorkspace(cwd, ({ engine }) => engine.fail({
+          withSession(session, ({ engine }) => engine.fail({
             attemptId: claimed.attempt.id,
             error: `delegate spawn failed: ${error.message}`,
             retryable: true,
@@ -816,8 +818,8 @@ function toolDelegate({ workspaceOf, settings, subagentsOf, activations, logger,
 
       activations.add(activation);
       Promise.resolve(activation.result)
-        .then(result => settleDelegation({ cwd, attemptId: claimed.attempt.id, outcome, result, withWorkspace, logger }))
-        .catch(error => settleFailure({ cwd, attemptId: claimed.attempt.id, error, withWorkspace, logger }))
+        .then(result => settleDelegation({ session, attemptId: claimed.attempt.id, outcome, result, withSession, logger }))
+        .catch(error => settleFailure({ session, attemptId: claimed.attempt.id, error, withSession, logger }))
         .finally(() => {
           activations.delete(activation);
           Promise.resolve(activation.dispose?.()).catch(() => {});
@@ -834,11 +836,11 @@ function toolDelegate({ workspaceOf, settings, subagentsOf, activations, logger,
   };
 }
 
-function settleDelegation({ cwd, attemptId, outcome, result, withWorkspace, logger }) {
+function settleDelegation({ session, attemptId, outcome, result, withSession, logger }) {
   const summary = textOf(result?.output) || result?.diagnostic || '';
   const errorText = result?.diagnostic ?? `subagent stopped: ${result?.stopReason ?? 'unknown'}`;
   try {
-    withWorkspace(cwd, ({ engine }) => {
+    withSession(session, ({ engine }) => {
       if (result?.stopReason === 'completed') {
         return engine.complete({ attemptId, outcome, result: { summary } });
       }
@@ -854,10 +856,10 @@ function settleDelegation({ cwd, attemptId, outcome, result, withWorkspace, logg
   }
 }
 
-function settleFailure({ cwd, attemptId, error, withWorkspace, logger }) {
+function settleFailure({ session, attemptId, error, withSession, logger }) {
   const message = `delegated subagent failed: ${error?.message ?? String(error)}`;
   try {
-    withWorkspace(cwd, ({ engine }) => engine.fail({
+    withSession(session, ({ engine }) => engine.fail({
       attemptId,
       error: message,
       retryable: true,
@@ -899,9 +901,9 @@ function textOf(blocks) {
 
 function resolveSettings(config) {
   return {
-    stateDir: typeof config.stateDir === 'string' && config.stateDir.trim() !== ''
-      ? config.stateDir
-      : DEFAULT_CONFIG.stateDir,
+    dataDir: typeof config.dataDir === 'string' && config.dataDir.trim() !== ''
+      ? path.resolve(config.dataDir)
+      : null,
     boardPort: Number.isInteger(config.boardPort) && config.boardPort >= 0
       ? config.boardPort
       : DEFAULT_CONFIG.boardPort,
