@@ -28,7 +28,7 @@
   ],
   "scripts": {
     "test": "node tests/run.mjs",
-    "test:runner": "node --test tests/",
+    "test:runner": "node --test \"tests/*.test.mjs\"",
     "test:watch": "node --test --watch tests/"
   },
   "main": "./src/plugin.mjs",

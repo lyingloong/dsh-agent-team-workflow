@@ -17,4 +17,4 @@ jobs:
         with:
           node-version: 24.x
       - name: Run tests
-        run: node --test tests/
+        run: npm test

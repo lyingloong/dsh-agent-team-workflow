@@ -71,8 +71,8 @@ node src/cli.mjs roster
 Run the tests:
 
 ```bash
-npm test                 # one process, no child spawn
-node --test tests/       # standard runner with per-file isolation
+npm test                          # one process, no child spawn
+node --test "tests/*.test.mjs"    # standard runner with per-file isolation
 ```
 
 ## Use as a DSH plugin
