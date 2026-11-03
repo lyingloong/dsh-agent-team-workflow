@@ -62,3 +62,12 @@ Initial release.
 - Require the DSH Connection's authentication fence on the embedded API routes.
   Requests without a Connection (or rejected by it) now get 503/401/403 instead
   of exposing or mutating workflow state. No client or UI change.
+
+## 0.2.2
+
+- Add a real workflow DAG to the embedded panel: stages are layered by their
+  longest dependency path, transitions carry their outcome labels, `needs_revision`
+  loops route around the side, and manual gates are marked on the node and edge.
+  Clicking a graph node scrolls to that stage's detail list.
+- Expose each stage's transitions (`on`) in the board projection so clients can
+  draw the graph without parsing the definition.

@@ -109,3 +109,11 @@ test('apply registers the tab, the pane body and the header entry', () => {
   header.definition.inject().open();
   assert.equal(captured.opened, 'team-workflow');
 });
+
+test('client renders the workflow DAG and its transitions', () => {
+  assert.ok(SOURCE.includes('function buildGraph'));
+  assert.ok(SOURCE.includes('function WorkflowGraph'));
+  assert.ok(SOURCE.includes('atw-graph-svg'));
+  assert.ok(SOURCE.includes('edge.label'));
+  assert.ok(SOURCE.includes('needs_revision'));
+});

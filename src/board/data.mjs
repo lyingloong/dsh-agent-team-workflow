@@ -116,6 +116,7 @@ export function buildBoardData({ snapshot, definition, now = new Date().toISOStr
         role: stage.role,
         providers: stage.providers,
         outcomes: Object.keys(stage.on),
+        on: { ...stage.on },
       })),
       roles: definition.roles.map(role => ({
         id: role.id,
