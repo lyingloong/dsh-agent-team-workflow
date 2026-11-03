@@ -1,0 +1,24 @@
+{
+  "apiVersion": 1,
+  "name": "minimal",
+  "description": "One worker, one stage. The smallest complete definition.",
+  "roles": [
+    {
+      "id": "worker",
+      "instances": 1,
+      "providers": ["local"]
+    }
+  ],
+  "providers": [
+    {
+      "id": "local",
+      "model": "any"
+    }
+  ],
+  "stages": [
+    {
+      "id": "work",
+      "role": "worker"
+    }
+  ]
+}

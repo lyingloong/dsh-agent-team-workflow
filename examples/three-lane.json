@@ -1,0 +1,84 @@
+{
+  "apiVersion": 1,
+  "name": "three-lane",
+  "description": "Three role lanes with one member per lane, nine slots total when each lane has three members.",
+  "roles": [
+    {
+      "id": "analyst",
+      "instances": 3,
+      "providers": ["lane-a", "lane-b", "lane-c"]
+    },
+    {
+      "id": "engineer",
+      "instances": 3,
+      "providers": ["lane-a", "lane-b", "lane-c"]
+    },
+    {
+      "id": "reviewer",
+      "instances": 3,
+      "providers": ["lane-a", "lane-b", "lane-c"]
+    }
+  ],
+  "providers": [
+    {
+      "id": "lane-a",
+      "model": "deepseek-flash",
+      "concurrency": 3
+    },
+    {
+      "id": "lane-b",
+      "model": "deepseek-flash",
+      "concurrency": 3
+    },
+    {
+      "id": "lane-c",
+      "model": "deepseek-flash",
+      "concurrency": 3
+    }
+  ],
+  "stages": [
+    {
+      "id": "specify",
+      "role": "analyst",
+      "on": {
+        "complete": "implement"
+      }
+    },
+    {
+      "id": "implement",
+      "role": "engineer",
+      "on": {
+        "complete": "review"
+      }
+    },
+    {
+      "id": "review",
+      "role": "reviewer",
+      "options": ["pass", "needs_revision"],
+      "on": {
+        "pass": "approved",
+        "needs_revision": "implement"
+      }
+    },
+    {
+      "id": "approved",
+      "role": "reviewer"
+    }
+  ],
+  "policies": {
+    "concurrency": {
+      "global": 9
+    },
+    "provider": {
+      "lowWatermarkPct": 15,
+      "backoffMinutes": [10, 30, 60],
+      "maxRetries": 3
+    },
+    "fallback": {
+      "sameRole": true
+    },
+    "review": {
+      "maxRounds": 3
+    }
+  }
+}

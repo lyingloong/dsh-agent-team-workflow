@@ -1,0 +1,87 @@
+{
+  "apiVersion": 1,
+  "name": "dev-team",
+  "description": "需求 → 实现 → 审查 → 人工合并门。三条模型线路，每角色三人。",
+  "roles": [
+    {
+      "id": "analyst",
+      "instances": 3,
+      "providers": ["lane-a", "lane-b", "lane-c"]
+    },
+    {
+      "id": "engineer",
+      "instances": 3,
+      "providers": ["lane-a", "lane-b", "lane-c"]
+    },
+    {
+      "id": "reviewer",
+      "instances": 3,
+      "providers": ["lane-a", "lane-b", "lane-c"]
+    }
+  ],
+  "providers": [
+    {
+      "id": "lane-a",
+      "model": "deepseek-flash",
+      "concurrency": 3,
+      "backoffMinutes": [10, 30, 60]
+    },
+    {
+      "id": "lane-b",
+      "model": "deepseek-flash",
+      "concurrency": 3,
+      "backoffMinutes": [10, 30, 60]
+    },
+    {
+      "id": "lane-c",
+      "model": "deepseek-flash",
+      "concurrency": 3,
+      "backoffMinutes": [10, 30, 60]
+    }
+  ],
+  "stages": [
+    {
+      "id": "specify",
+      "title": "需求",
+      "role": "analyst",
+      "providers": ["lane-a", "lane-b", "lane-c"],
+      "on": { "complete": "implement" }
+    },
+    {
+      "id": "implement",
+      "title": "实现",
+      "role": "engineer",
+      "providers": ["lane-a", "lane-b", "lane-c"],
+      "on": { "complete": "review" }
+    },
+    {
+      "id": "review",
+      "title": "审查",
+      "role": "reviewer",
+      "providers": ["lane-a", "lane-b", "lane-c"],
+      "options": ["pass", "needs_revision"],
+      "on": { "pass": "approved", "needs_revision": "implement" }
+    },
+    {
+      "id": "approved",
+      "title": "已合并",
+      "role": "reviewer"
+    }
+  ],
+  "gates": [
+    {
+      "id": "merge",
+      "after": "review",
+      "outcome": "pass",
+      "kind": "manual",
+      "required": true
+    }
+  ],
+  "policies": {
+    "concurrency": { "global": 9 },
+    "provider": { "lowWatermarkPct": 15, "backoffMinutes": [10, 30, 60], "maxRetries": 3 },
+    "fallback": { "sameRole": true },
+    "retry": { "maxAttempts": 3, "backoffSeconds": [30, 120, 300] },
+    "review": { "maxRounds": 3 }
+  }
+}

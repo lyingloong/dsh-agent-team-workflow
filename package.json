@@ -1,0 +1,59 @@
+{
+  "name": "agent-team-workflow",
+  "version": "0.1.0",
+  "private": false,
+  "description": "DSH plugin for user-defined, resumable agent-team workflows with model-lane failover, gates and a local kanban board.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.5.0",
+    "dsh": ">=0.2.1-rc.2"
+  },
+  "bin": {
+    "agent-team-workflow": "./src/cli.mjs",
+    "atw": "./src/cli.mjs"
+  },
+  "exports": {
+    ".": "./src/plugin.mjs",
+    "./engine": "./src/index.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "examples",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node tests/run.mjs",
+    "test:runner": "node --test tests/",
+    "test:watch": "node --test --watch tests/"
+  },
+  "main": "./src/plugin.mjs",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "agent-teams",
+    "workflow",
+    "kanban"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lyingloong/agent-team-workflow.git"
+  },
+  "homepage": "https://github.com/lyingloong/agent-team-workflow#readme",
+  "bugs": {
+    "url": "https://github.com/lyingloong/agent-team-workflow/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
