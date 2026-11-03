@@ -69,12 +69,61 @@ function makeCtx({ subagents } = {}) {
   return { ctx, tools, sections, cleanups };
 }
 
+function assertOutputValue(schema, value, where) {
+  if (schema.enum !== undefined) {
+    assert.ok(schema.enum.includes(value), `${where}: ${JSON.stringify(value)} is not one of ${schema.enum.join(', ')}`);
+  }
+  switch (schema.type) {
+    case 'object': {
+      assert.ok(value !== null && typeof value === 'object' && !Array.isArray(value), `${where}: expected an object`);
+      for (const name of schema.required ?? []) {
+        assert.ok(Object.hasOwn(value, name), `${where}: missing required property "${name}"`);
+      }
+      const properties = schema.properties ?? {};
+      for (const [name, child] of Object.entries(value)) {
+        if (schema.additionalProperties === false) {
+          assert.ok(Object.hasOwn(properties, name), `${where}: undeclared property "${name}"`);
+        }
+        if (Object.hasOwn(properties, name)) assertOutputValue(properties[name], child, `${where}.${name}`);
+      }
+      return;
+    }
+    case 'array':
+      assert.ok(Array.isArray(value), `${where}: expected an array`);
+      value.forEach((item, index) => assertOutputValue(schema.items ?? {}, item, `${where}[${index}]`));
+      return;
+    case 'string':
+      assert.equal(typeof value, 'string', `${where}: expected a string`);
+      return;
+    case 'integer':
+      assert.ok(Number.isInteger(value), `${where}: expected an integer`);
+      return;
+    case 'number':
+      assert.ok(typeof value === 'number' && Number.isFinite(value), `${where}: expected a number`);
+      return;
+    case 'boolean':
+      assert.equal(typeof value, 'boolean', `${where}: expected a boolean`);
+      return;
+    case 'null':
+      assert.equal(value, null, `${where}: expected null`);
+      return;
+    default:
+      return;
+  }
+}
+
 function setup(t, { config = {}, subagents } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'team-workflow-plugin-'));
   const { ctx, tools, sections, cleanups } = makeCtx({ subagents });
   apply(ctx, { stateDir: '.state', autoBoard: false, ...config });
   const exec = { agent: { session: { header: { cwd: dir } } }, signal: new AbortController().signal };
-  const call = (name, args = {}) => tools.get(name).execute(args, exec);
+  const call = async (name, args = {}) => {
+    const tool = tools.get(name);
+    const value = await tool.execute(args, exec);
+    // Mirror the host's output contract: an undeclared property is an error.
+    assertOutputValue(tool.output.schema, value, `${name} output`);
+    return value;
+  };
   t.after(async () => {
     for (const cleanup of cleanups) await cleanup();
     await new Promise(resolve => setTimeout(resolve, 60));

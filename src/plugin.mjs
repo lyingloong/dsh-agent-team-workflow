@@ -469,22 +469,31 @@ function toolGate({ workspaceOf, withWorkspace }) {
       schema: objectSchema({
         status: stringSchema(),
         itemId: stringSchema(),
+        gate: stringSchema(),
         stage: stringSchema(),
-      }, ['status', 'itemId']),
+        remaining: { type: 'array', items: stringSchema() },
+      }, ['status', 'itemId', 'gate']),
       render: (_args, value) => [{
         type: 'text',
-        text: `Gate ${value.status} for ${value.itemId}${value.stage ? ` (now at ${value.stage})` : ''}.`,
+        text: `Gate ${value.gate} ${value.status} for ${value.itemId}${value.stage ? ` (now at ${value.stage})` : ''}${value.remaining ? `; still waiting on ${value.remaining.join(', ')}` : ''}.`,
       }],
     },
     async execute(args, exec) {
       const cwd = workspaceOf(exec);
-      return withWorkspace(cwd, ({ engine }) => engine.decideGate({
+      const decided = withWorkspace(cwd, ({ engine }) => engine.decideGate({
         itemId: requireString(args?.itemId, 'itemId'),
         gate: requireString(args?.gate, 'gate'),
         decision: requireString(args?.decision, 'decision'),
         by: 'dsh',
         note: typeof args?.note === 'string' ? args.note : '',
       }));
+      return {
+        status: decided.status,
+        itemId: decided.itemId,
+        gate: decided.gate,
+        ...(decided.stage ? { stage: decided.stage } : {}),
+        ...(decided.remaining ? { remaining: decided.remaining } : {}),
+      };
     },
   };
 }
@@ -569,11 +578,20 @@ function toolComplete({ workspaceOf, withWorkspace }) {
     },
     async execute(args, exec) {
       const cwd = workspaceOf(exec);
-      return withWorkspace(cwd, ({ engine }) => engine.complete({
+      const completed = withWorkspace(cwd, ({ engine }) => engine.complete({
         attemptId: requireString(args?.attemptId, 'attemptId'),
         outcome: args?.outcome === undefined ? 'complete' : requireString(args.outcome, 'outcome'),
         result: args?.result ?? {},
       }));
+      // Project exactly the declared fields: the host rejects extra output
+      // properties, and the engine's duplicate branch carries an attempt id.
+      return {
+        status: completed.status,
+        ...(completed.itemId ? { itemId: completed.itemId } : {}),
+        ...(completed.stage ? { stage: completed.stage } : {}),
+        ...(completed.nextTaskId ? { nextTaskId: completed.nextTaskId } : {}),
+        ...(completed.gates ? { gates: completed.gates } : {}),
+      };
     },
   };
 }
@@ -595,6 +613,7 @@ function toolFail({ workspaceOf, withWorkspace }) {
         maxAttempts: integerSchema(),
         availableAt: stringSchema(),
         providerFailure: booleanSchema(),
+        itemId: stringSchema(),
       }, ['status']),
       render: (_args, value) => [{
         type: 'text',
@@ -607,12 +626,20 @@ function toolFail({ workspaceOf, withWorkspace }) {
     },
     async execute(args, exec) {
       const cwd = workspaceOf(exec);
-      return withWorkspace(cwd, ({ engine }) => engine.fail({
+      const failed = withWorkspace(cwd, ({ engine }) => engine.fail({
         attemptId: requireString(args?.attemptId, 'attemptId'),
         error: typeof args?.error === 'string' ? args.error : '',
         providerError: args?.providerError === true,
         retryable: args?.retryable !== false,
       }));
+      return {
+        status: failed.status,
+        ...(Number.isInteger(failed.attemptCount) ? { attemptCount: failed.attemptCount } : {}),
+        ...(Number.isInteger(failed.maxAttempts) ? { maxAttempts: failed.maxAttempts } : {}),
+        ...(failed.availableAt ? { availableAt: failed.availableAt } : {}),
+        ...(failed.providerFailure === true ? { providerFailure: true } : {}),
+        ...(failed.itemId ? { itemId: failed.itemId } : {}),
+      };
     },
   };
 }
