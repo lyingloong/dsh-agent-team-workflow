@@ -173,6 +173,12 @@ async function executeToken(state, token, executors, now) {
     const outcome = typeof result?.outcome === 'string' && result.outcome !== ''
       ? result.outcome
       : node.type === 'agent' ? (node.config.outcome ?? 'complete') : 'complete';
+    if (outcome === 'fail' && !state.definition.edges.some(edge => edge.from === node.id && edge.on === 'fail')) {
+      token.status = 'failed';
+      token.error = { code: 'unhandled_failure', message: `node ${node.id} returned fail and has no fail edge` };
+      token.updatedAt = now();
+      return;
+    }
     completeToken(state, token, { outcome, output: result?.output ?? null });
     followEdges(state, token, outcome, now);
   } catch (error) {

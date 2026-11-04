@@ -143,6 +143,7 @@ function validateNodeConfig(node, path, errors, depth) {
     if (config.lane !== undefined) text(config.lane, `${path}.config.lane`, errors, 80);
     if (config.provider !== undefined) text(config.provider, `${path}.config.provider`, errors, 120);
     if (config.model !== undefined) text(config.model, `${path}.config.model`, errors, 200);
+    if (config.cwd !== undefined) text(config.cwd, `${path}.config.cwd`, errors, 400);
     if (config.outcome !== undefined) text(config.outcome, `${path}.config.outcome`, errors, 80);
   } else if (node.type === 'command') {
     if (config.command === undefined) errors.push({ path: `${path}.config.command`, message: 'is required' });

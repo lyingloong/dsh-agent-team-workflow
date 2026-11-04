@@ -47,7 +47,7 @@ const HUMAN_AGENT = {
   entry: 'seed',
   nodes: [
     { id: 'seed', type: 'human', config: { outcomes: ['approve'] } },
-    { id: 'impl', type: 'agent', role: 'engineer', inputs: { task: '$input.task' }, config: { provider: 'provider-a', model: 'model-1' } },
+    { id: 'impl', type: 'agent', role: 'engineer', inputs: { task: '$input.task' }, config: { provider: 'provider-a', model: 'model-1', cwd: 'sub' } },
   ],
   edges: [{ from: 'seed', to: 'impl', on: 'approve' }],
 };
@@ -80,7 +80,7 @@ test('define, start, wait at human, decide, run to completion', async (t) => {
       };
     },
   };
-  const { call } = setup(t, { subagents });
+  const { dir, call } = setup(t, { subagents });
   const defined = await call('team_workflow_define', { definition: HUMAN_AGENT });
   assert.equal(defined.ok, true, JSON.stringify(defined.errors));
   const started = await call('team_workflow_start', { input: { task: 'build' } });
@@ -97,6 +97,7 @@ test('define, start, wait at human, decide, run to completion', async (t) => {
   assert.equal(calls.length, 1);
   assert.match(calls[0].request.prompt[0].text, /build/);
   assert.deepEqual(calls[0].request.agentOptions, { provider: 'provider-a', model: 'model-1' });
+  assert.equal(calls[0].request.cwd, path.resolve(dir, 'sub'));
 });
 
 test('command nodes run only with a permission grant', async (t) => {
