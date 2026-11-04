@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.2
+
+- Board buttons now open the board in an in-app full-screen iframe overlay
+  instead of relying on new tabs/windows, which the Harness host may block.
+- The overlay has a close action and a `当前页打开` fallback that navigates the
+  current tab to the board URL.
+
 ## 1.7.1
 
 - Replace the side-panel `↗` `window.open` action with a real anchor link so it

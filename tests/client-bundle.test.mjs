@@ -73,6 +73,9 @@ test('client registers the right-sidebar tab and opens it from the conversation 
   assert.ok(SOURCE.includes('/board?session='));
   assert.ok(SOURCE.includes('team-workflow-board'));
   assert.ok(SOURCE.includes('看板'));
+  assert.ok(SOURCE.includes('openBoardOverlay'));
+  assert.ok(SOURCE.includes('BOARD_OVERLAY_ID'));
+  assert.ok(SOURCE.includes('当前页打开'));
   assert.ok(SOURCE.includes('sessionId'));
 });
 
