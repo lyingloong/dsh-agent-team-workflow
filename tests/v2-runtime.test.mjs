@@ -14,6 +14,7 @@ import {
   normalizePermissions,
   resolveValue,
   run,
+  waitingHumanTokens,
   waitingTokens,
 } from '../src/v2/runtime.mjs';
 import { SessionStore } from '../src/v2/store.mjs';
@@ -182,4 +183,47 @@ test('resolveValue handles input and node output paths', () => {
   assert.equal(resolveValue('$nodes.a.output.value', scope), 2);
   assert.equal(resolveValue('$item', scope).x, 3);
   assert.equal(resolveValue({ nested: '$index' }, scope).nested, 0);
+});
+
+test('join waits stay internal and are not decisions', async () => {
+  const flow = definition([
+    { id: 'split', type: 'fanout', config: { items: '$input.items', target: 'gate', join: 'join' } },
+    { id: 'gate', type: 'human' },
+    { id: 'join', type: 'join', config: { mode: 'all' } },
+    { id: 'after', type: 'human', config: { outcomes: ['approve'] } },
+  ], [{ from: 'join', to: 'after', on: 'complete' }]);
+  const state = newRunState({ definition: flow, permissions: DEFAULT_PERMISSIONS, input: { items: ['a', 'b'] } });
+  await run(state, fakeExecutors());
+  assert.equal(state.status, 'waiting');
+
+  const raw = waitingTokens(state);
+  assert.equal(raw.length, 3);
+  const joinToken = raw.find(token => token.nodeId === 'join');
+  assert.ok(joinToken);
+  assert.deepEqual(waitingHumanTokens(state).map(token => token.nodeId), ['gate', 'gate']);
+
+  const snapshot = JSON.stringify(state.tokens);
+  assert.throws(
+    () => decide(state, { tokenId: joinToken.id, outcome: 'approve' }),
+    error => error instanceof RuntimeError && error.code === 'not_decidable',
+  );
+  assert.equal(joinToken.status, 'waiting');
+  assert.equal(joinToken.outcome, null);
+  assert.equal(JSON.stringify(state.tokens), snapshot);
+  assert.equal(state.context.nodes.join, undefined);
+
+  for (const token of waitingHumanTokens(state)) decide(state, { tokenId: token.id, outcome: 'approve' });
+  await run(state, fakeExecutors());
+  assert.equal(state.status, 'waiting');
+  assert.deepEqual(waitingHumanTokens(state).map(token => token.nodeId), ['after']);
+
+  const join = state.context.nodes.join;
+  assert.equal(join.outcome, 'complete');
+  assert.equal(join.output.length, 2);
+  assert.deepEqual(join.output.map(entry => entry.outcome), ['approve', 'approve']);
+  assert.deepEqual(join.output.map(entry => entry.branch.index).sort(), [0, 1]);
+
+  decide(state, { tokenId: waitingHumanTokens(state)[0].id, outcome: 'approve' });
+  await run(state, fakeExecutors());
+  assert.equal(state.status, 'done');
 });

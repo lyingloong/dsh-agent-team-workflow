@@ -12,6 +12,11 @@
   title/role/provider fields), which the model update route relies on.
 - Keep the model picker out of non-agent nodes; command/HTTP/human nodes have no
   model selection.
+- Stop surfacing internal `join` waits as human decisions. The `waiting` list
+  from `team_workflow_run`, `team_workflow_status`, the panel and the Web API
+  now contains only `human` node tokens; `team_workflow_decide` rejects a join
+  token with `not_decidable` instead of completing the join early and skipping
+  its downstream nodes.
 
 ## 1.0.0
 

@@ -148,3 +148,39 @@ test('status reports no run before start and rejects malformed definitions', asy
   assert.equal(rejected.ok, false);
   assert.match(rejected.errors[0].path, /nodes/);
 });
+
+test('fan-out run reports only human decisions and reaches done', async (t) => {
+  const { call } = setup(t);
+  const flow = {
+    apiVersion: 2,
+    name: 'fanout-human',
+    entry: 'split',
+    nodes: [
+      { id: 'split', type: 'fanout', config: { items: '$input.items', target: 'gate', join: 'join' } },
+      { id: 'gate', type: 'human' },
+      { id: 'join', type: 'join', config: { mode: 'all' } },
+      { id: 'after', type: 'human', config: { outcomes: ['approve'] } },
+    ],
+    edges: [{ from: 'join', to: 'after', on: 'complete' }],
+  };
+  const defined = await call('team_workflow_define', { definition: flow });
+  assert.equal(defined.ok, true, JSON.stringify(defined.errors));
+  const started = await call('team_workflow_start', { input: { items: ['a', 'b'] } });
+
+  const waiting = await call('team_workflow_run', { runId: started.runId });
+  assert.equal(waiting.status, 'waiting');
+  assert.deepEqual(waiting.waiting.map(token => token.nodeId), ['gate', 'gate']);
+
+  for (const token of waiting.waiting) {
+    await call('team_workflow_decide', { tokenId: token.tokenId, outcome: 'approve' });
+  }
+  const after = await call('team_workflow_run', { runId: started.runId });
+  assert.equal(after.status, 'waiting');
+  assert.deepEqual(after.waiting.map(token => token.nodeId), ['after']);
+
+  await call('team_workflow_decide', { tokenId: after.waiting[0].tokenId, outcome: 'approve' });
+  const done = await call('team_workflow_run', { runId: started.runId });
+  assert.equal(done.status, 'done');
+  const status = await call('team_workflow_status', { runId: started.runId });
+  assert.deepEqual(status.run.waiting, []);
+});

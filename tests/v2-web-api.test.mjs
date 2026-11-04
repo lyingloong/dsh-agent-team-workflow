@@ -29,6 +29,19 @@ const MODEL_FLOW = normalizeDefinition({
   edges: [],
 });
 
+const FANOUT_FLOW = normalizeDefinition({
+  apiVersion: 2,
+  name: 'fanout-api-flow',
+  entry: 'split',
+  nodes: [
+    { id: 'split', type: 'fanout', config: { items: '$input.items', target: 'gate', join: 'join' } },
+    { id: 'gate', type: 'human' },
+    { id: 'join', type: 'join', config: { mode: 'all' } },
+    { id: 'after', type: 'human' },
+  ],
+  edges: [{ from: 'join', to: 'after', on: 'complete' }],
+});
+
 function setup(t) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'workflow-v2-api-'));
   const dataRoot = path.join(dir, '.data');
@@ -189,3 +202,39 @@ test('v2 web API lists host models and updates an agent node model', async (t) =
   assert.equal(run.definition.nodes[0].config.model, 'model-1');
 });
 
+test('web API panel state excludes internal join waits', async (t) => {
+  const { routes, store } = setup(t);
+  await store.saveDefinition({ definition: FANOUT_FLOW, permissions: {} });
+  const started = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/start'), {
+    method: 'POST',
+    url: '/plugins/dsh-agent-team-workflow/api/start',
+    body: { session: SESSION, input: { items: ['a', 'b'] } },
+  });
+  assert.equal(started.status, 201);
+  const runId = started.json.run.runId;
+
+  const waiting = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/run'), {
+    method: 'POST',
+    url: '/plugins/dsh-agent-team-workflow/api/run',
+    body: { session: SESSION, runId },
+  });
+  assert.equal(waiting.status, 200);
+  assert.equal(waiting.json.run.status, 'waiting');
+  assert.deepEqual(waiting.json.run.waiting.map(token => token.nodeId), ['gate', 'gate']);
+  const joinToken = waiting.json.run.tokens.find(token => token.nodeId === 'join');
+  assert.equal(joinToken.status, 'waiting');
+
+  const panel = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/state'), {
+    url: `/plugins/dsh-agent-team-workflow/api/state?session=${SESSION}`,
+  });
+  assert.equal(panel.status, 200);
+  assert.deepEqual(panel.json.run.waiting.map(token => token.nodeId), ['gate', 'gate']);
+
+  const rejected = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/decide'), {
+    method: 'POST',
+    url: '/plugins/dsh-agent-team-workflow/api/decide',
+    body: { session: SESSION, runId, tokenId: joinToken.id, outcome: 'approve' },
+  });
+  assert.equal(rejected.status, 400);
+  assert.equal(rejected.json.error.code, 'not_decidable');
+});
