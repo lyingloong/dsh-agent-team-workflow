@@ -217,14 +217,29 @@ The nested run shares the parent's permission grant and executors. A nested
 human wait is currently not supported: the child must reach `done` before the
 subworkflow node completes.
 
+## Auto-dev reference
+
+[examples/auto-dev.json](examples/auto-dev.json) is a complete requirement→PR→
+user-decision flow:
+
+`discover` → `branch` → `implement` → `npm test` → `review`
+(→ implement on `needs_revision`) → open PR → human decision → merge.
+
+It requires a command grant for `npm` and `gh`, a configured `gh` login, and a
+session whose cwd is the target repository. The flow is serial: a `team_workflow_run`
+call executes it until the human node; the panel or another run call continues
+after the decision. `gh pr create` is intentionally one-shot in this example;
+re-running on a branch that already has a PR fails the `pr` node.
+
 ## Web panel
 
 The right-sidebar **工作流** tab is graph-first:
 
 - a compact header with workflow name, run status, node/edge count and
   permission state;
-- the node graph, which scales to the available pane size, with node type,
-  role, execution count and agent model;
+- the node graph, which scales to the available pane size; each node type has
+  its own glyph, tint, border and type label, with thicker arrows and outcome
+  labels;
 - waiting human decisions with outcome buttons;
 - clicking a node opens a sheet with its latest token, output, errors and raw
   config; agent nodes include an ordered model fallback list with add/remove/

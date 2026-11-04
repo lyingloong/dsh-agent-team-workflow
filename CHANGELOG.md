@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0
+
+- Clearer graph edges: thicker 1.5px strokes, larger fixed-size arrowheads,
+  stronger labels and better contrast.
+- Distinct node types: per-type glyph, tinted fill, border color, human dashed
+  border and a double border for subworkflows, alongside the type label.
+- Add `examples/auto-dev.json`: discover → implement → test → review →
+  PR → user decision → merge, with an AI review revision loop.
+- Add an examples validation test; 31 tests passing.
+
 ## 1.3.0
 
 - Responsive graph: the node graph now measures its stage with `ResizeObserver`

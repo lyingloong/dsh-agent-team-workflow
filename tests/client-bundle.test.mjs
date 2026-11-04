@@ -157,4 +157,9 @@ test('panel exposes v2 run state, node details, decisions and permissions', () =
   assert.ok(SOURCE.includes('atw-model-row'));
   assert.ok(SOURCE.includes('changeModels'));
   assert.ok(SOURCE.includes('ResizeObserver'));
+  assert.ok(SOURCE.includes('markerWidth: 10'));
+  assert.ok(SOURCE.includes('strokeWidth: 1.5'));
+  assert.ok(SOURCE.includes('atw-graph-glyph'));
+  assert.ok(SOURCE.includes('TYPE_STYLE'));
+  assert.ok(SOURCE.includes('atw-graph-box.type-'));
 });
