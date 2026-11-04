@@ -248,17 +248,15 @@ The board is graph-first:
 - a node graph with a word-aware two-line title, role/model or command/HTTP
   detail, status dot and run count; node types keep their own glyph and accent;
 - drag the graph to pan, use the wheel to zoom around the pointer, and use the
-  graph controls for fit/actual-size; orthogonal edges route with an A* grid
-  around node rectangles, so they do not pass through cards; outcome labels sit
-  beside their lines;
+  graph controls for fit/actual-size; layered channel routing keeps forward edges
+  in the gaps between ranks and gives feedback edges their own side lanes, so
+  edges do not cut through cards; outcome labels sit beside their lines;
 - clicking a node opens its detail card **below the graph**, with latest token,
   output, errors and raw config;
 - the **运行** card shows run progress and waiting human decisions. Human nodes
-  are decided with outcome buttons only; no JSON input is needed there;
-- the **启动参数** card builds fields from the workflow's `$input.*` references,
-  so auto-dev shows a `goal` field; it is not human input, and an advanced JSON
-  editor remains for arbitrary objects. Leave fields empty when the workflow
-  needs no parameters.
+  are decided with outcome buttons only; no JSON input is needed there. The board
+  does not start or replace runs: the assistant starts one; the board observes it
+  and continues it after a decision.
 
 The board deliberately stays an observer/light controller, not a workflow
 builder: the session model authors definitions through the tools. It can only
@@ -288,10 +286,11 @@ http://127.0.0.1:<board-port>/plugins/dsh-agent-team-workflow/public/board?sessi
 token-protected and has no DSH Connection fence; it is a second loopback port,
 not the Harness web server. Do not share the URL: the token grants board access.
 
-The page starts a run, continues a run and decides waiting humans (the latter
-uses the last Agent observed for the session). Node details open below the graph;
-the start-input card is only the workflow `$input`. If the native Browser tab is
-unavailable, the action falls back to navigating the current page to the board.
+The page observes a run and continues it after a human decision (the latter uses
+the last Agent observed for the session). It does not start runs; the assistant
+starts them with `team_workflow_start`. Node details open below the graph. If the
+native Browser tab is unavailable, the action falls back to navigating the
+current page to the board.
 
 ![Web board preview](docs/board-preview.png)
 

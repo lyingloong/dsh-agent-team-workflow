@@ -37,7 +37,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body { background: var(--bg); color: var(--text); font: 13px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
-button, textarea { font: inherit; }
+button { font: inherit; }
 button { cursor: pointer; }
 .top { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(10px); }
 .top-inner { max-width: 1280px; margin: 0 auto; padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
@@ -74,14 +74,13 @@ button { cursor: pointer; }
 .graph { position: relative; height: clamp(520px, 66vh, 760px); overflow: hidden; cursor: grab; touch-action: none; user-select: none; background-image: radial-gradient(circle, color-mix(in srgb, var(--line) 76%, transparent) .8px, transparent 1px); background-size: 18px 18px; }
 .graph.dragging { cursor: grabbing; }
 .graph svg { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: block; }
-.graph-tools { position: absolute; right: 12px; bottom: 12px; z-index: 3; display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--panel) 94%, transparent); box-shadow: var(--shadow); backdrop-filter: blur(6px); }
+.graph-tools { position: absolute; right: 12px; top: 12px; z-index: 3; display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--panel) 94%, transparent); box-shadow: var(--shadow); backdrop-filter: blur(6px); }
 .graph-tools button { min-width: 26px; height: 24px; padding: 0 6px; border: 0; border-radius: 5px; background: transparent; color: var(--text); font-size: 12px; }
 .graph-tools button:hover { background: var(--panel-2); }
 .graph-tools .zoom-label { min-width: 42px; text-align: center; color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .node { cursor: pointer; }
 .node:hover .node-box { filter: drop-shadow(0 3px 8px rgba(16, 24, 40, .14)); }
 .node-box { fill: var(--panel); stroke: var(--line); stroke-width: 1; filter: drop-shadow(0 1px 2px rgba(16, 24, 40, .06)); }
-.node-box.selected { stroke: var(--brand); stroke-width: 2; }
 .node-box.wait { stroke: var(--warn); stroke-width: 2; }
 .node-box.running { stroke: var(--brand); stroke-width: 2; }
 .node-box.failed { stroke: var(--bad); stroke-width: 2; }
@@ -118,21 +117,6 @@ button { cursor: pointer; }
 .detail-kv dt { color: var(--muted); }
 .detail-kv dd { margin: 0; overflow-wrap: anywhere; }
 .detail-pre { margin: 0; max-height: 260px; overflow: auto; padding: 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); font: 10px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
-.start-card { margin-top: 14px; }
-.start-body { padding: 12px; display: grid; gap: 8px; }
-.start-fields { display: grid; gap: 8px; }
-.field { display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr); gap: 8px; align-items: center; }
-.field label { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
-.field label code { color: var(--text); }
-.field input { width: 100%; height: 30px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--text); padding: 0 8px; font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
-.field-note { color: var(--muted); font-size: 10.5px; }
-.advanced { border-top: 1px dashed var(--line); padding-top: 8px; }
-.advanced summary { cursor: pointer; color: var(--muted); font-size: 11px; }
-.advanced textarea { margin-top: 8px; }
-.help { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
-.help strong { color: var(--text); }
-textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); padding: 8px; font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
-.start-actions { display: flex; align-items: center; gap: 8px; }
 .empty { padding: 44px 18px; text-align: center; color: var(--muted); }
 .empty strong { display: block; margin-bottom: 5px; color: var(--text); font-size: 13px; }
 .toast { position: fixed; right: 18px; bottom: 18px; z-index: 30; max-width: 440px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); font-size: 11.5px; }
@@ -193,7 +177,6 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
       <div class="run-summary" id="runSummary"></div>
       <div class="run-actions">
         <button class="btn primary" id="runBtn" type="button">继续运行</button>
-        <button class="btn" id="newBtn" type="button">新运行</button>
       </div>
       <div class="waiting" id="waiting"></div>
     </section>
@@ -207,22 +190,6 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
       <button class="icon-btn" id="closeDetail" type="button" title="关闭节点详情" aria-label="关闭节点详情">×</button>
     </div>
     <div class="detail-body" id="detailBody"></div>
-  </section>
-
-  <section class="card start-card">
-    <div class="card-head"><strong>启动参数</strong><span class="hint">$input</span></div>
-    <div class="start-body">
-      <p class="help">启动参数是工作流开始运行时传给 <strong>$input</strong> 的数据，不是人工节点的审批输入。比如 auto-dev 的 <code>goal</code> 表示本次需求目标；人工节点在上方“运行 → 等待决策”里直接选结果。</p>
-      <div class="start-fields" id="startFields"></div>
-      <details class="advanced">
-        <summary>高级：直接编辑 JSON</summary>
-        <textarea id="startInput" spellcheck="false">{}</textarea>
-      </details>
-      <div class="start-actions">
-        <button class="btn primary" id="startBtn" type="button">启动新运行</button>
-        <span class="help">字段留空也可以启动。</span>
-      </div>
-    </div>
   </section>
 </main>
 
@@ -255,7 +222,6 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
   let view = { scale: 1, tx: 0, ty: 0, initialized: false };
   let drag = null;
   let suppressClick = false;
-  let advancedDirty = false;
   let busy = false;
   let toastTimer = null;
 
@@ -448,141 +414,6 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
     return { x: node.x, y: node.y + node.h * fraction, nx: -1, ny: 0 };
   }
 
-  class Heap {
-    constructor() { this.items = []; }
-    push(priority, value) {
-      const item = { priority, value };
-      this.items.push(item);
-      let index = this.items.length - 1;
-      while (index > 0) {
-        const parent = (index - 1) >> 1;
-        if (this.items[parent].priority <= item.priority) break;
-        this.items[index] = this.items[parent];
-        index = parent;
-      }
-      this.items[index] = item;
-    }
-    pop() {
-      if (!this.items.length) return undefined;
-      const top = this.items[0];
-      const last = this.items.pop();
-      if (this.items.length && last) {
-        let index = 0;
-        while (true) {
-          const left = index * 2 + 1;
-          const right = left + 1;
-          if (left >= this.items.length) break;
-          let child = left;
-          if (right < this.items.length && this.items[right].priority < this.items[left].priority) child = right;
-          if (this.items[child].priority >= last.priority) break;
-          this.items[index] = this.items[child];
-          index = child;
-        }
-        this.items[index] = last;
-      }
-      return top;
-    }
-    get size() { return this.items.length; }
-  }
-
-  function routeEdge(start, end, nodes, width, height, usage, step = 8) {
-    const cols = Math.max(1, Math.ceil(width / step));
-    const rows = Math.max(1, Math.ceil(height / step));
-    const blocked = new Uint8Array(cols * rows);
-    const margin = 9;
-    for (const node of nodes) {
-      const left = Math.floor((node.x - margin) / step);
-      const right = Math.ceil((node.x + node.w + margin) / step);
-      const top = Math.floor((node.y - margin) / step);
-      const bottom = Math.ceil((node.y + node.h + margin) / step);
-      for (let r = Math.max(0, top); r <= Math.min(rows - 1, bottom); r += 1) {
-        for (let c = Math.max(0, left); c <= Math.min(cols - 1, right); c += 1) {
-          const cx = c * step + step / 2;
-          const cy = r * step + step / 2;
-          if (cx > node.x - margin && cx < node.x + node.w + margin && cy > node.y - margin && cy < node.y + node.h + margin) {
-            blocked[r * cols + c] = 1;
-          }
-        }
-      }
-    }
-    const cellAt = point => {
-      const c0 = Math.max(0, Math.min(cols - 1, Math.floor(point.x / step)));
-      const r0 = Math.max(0, Math.min(rows - 1, Math.floor(point.y / step)));
-      if (!blocked[r0 * cols + c0]) return { c: c0, r: r0 };
-      for (let radius = 1; radius < 20; radius += 1) {
-        for (let dr = -radius; dr <= radius; dr += 1) {
-          for (let dc = -radius; dc <= radius; dc += 1) {
-            if (Math.abs(dr) !== radius && Math.abs(dc) !== radius) continue;
-            const rr = r0 + dr, cc = c0 + dc;
-            if (rr >= 0 && rr < rows && cc >= 0 && cc < cols && !blocked[rr * cols + cc]) return { c: cc, r: rr };
-          }
-        }
-      }
-      return { c: c0, r: r0 };
-    };
-    const startCell = cellAt(start);
-    const endCell = cellAt(end);
-    blocked[startCell.r * cols + startCell.c] = 0;
-    blocked[endCell.r * cols + endCell.c] = 0;
-    const startIndex = startCell.r * cols + startCell.c;
-    const endIndex = endCell.r * cols + endCell.c;
-    const states = cols * rows * 5;
-    const best = new Float64Array(states).fill(Infinity);
-    const parent = new Int32Array(states).fill(-1);
-    const heap = new Heap();
-    const dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-    best[startIndex * 5 + 4] = 0;
-    heap.push(0, { index: startIndex, dir: 4 });
-    let found = -1;
-    while (heap.size) {
-      const current = heap.pop();
-      if (!current) break;
-      const { index, dir } = current.value;
-      if (index === endIndex) { found = index * 5 + dir; break; }
-      const c = index % cols;
-      const r = (index - c) / cols;
-      for (let next = 0; next < 4; next += 1) {
-        const nc = c + dirs[next][0];
-        const nr = r + dirs[next][1];
-        if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
-        const nextIndex = nr * cols + nc;
-        if (blocked[nextIndex]) continue;
-        const turn = dir !== 4 && dir !== next ? 0.75 : 0;
-        const cost = 1 + turn + (usage[nextIndex] || 0) * 0.45;
-        const state = nextIndex * 5 + next;
-        const value = best[index * 5 + dir] + cost;
-        if (value >= best[state]) continue;
-        best[state] = value;
-        parent[state] = index * 5 + dir;
-        const h = Math.abs(nc - endCell.c) + Math.abs(nr - endCell.r);
-        heap.push(value + h, { index: nextIndex, dir: next });
-      }
-    }
-    if (found < 0) return null;
-    const cells = [];
-    let cursor = found;
-    while (cursor >= 0) {
-      const index = Math.floor(cursor / 5);
-      const c = index % cols;
-      const r = (index - c) / cols;
-      cells.push({ x: c * step + step / 2, y: r * step + step / 2, index });
-      cursor = parent[cursor];
-    }
-    cells.reverse();
-    for (const cell of cells) usage[cell.index] = (usage[cell.index] || 0) + 1;
-    const points = [start, ...cells, end];
-    const clean = [];
-    for (const point of points) {
-      const last = clean[clean.length - 1];
-      if (!last || Math.abs(last.x - point.x) > 2.2 || Math.abs(last.y - point.y) > 2.2) clean.push(point);
-    }
-    for (let index = clean.length - 2; index > 0; index -= 1) {
-      const a = clean[index - 1], b = clean[index], c = clean[index + 1];
-      if ((Math.abs(a.x - b.x) < 1.6 && Math.abs(b.x - c.x) < 1.6) || (Math.abs(a.y - b.y) < 1.6 && Math.abs(b.y - c.y) < 1.6)) clean.splice(index, 1);
-    }
-    return clean;
-  }
-
   function orthogonalize(points) {
     const out = [];
     const add = point => {
@@ -621,7 +452,7 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
   function layout(definition) {
     const { rank, groups, incoming } = longestRanks(definition);
     orderRanks(groups, incoming);
-    const nodeWidth = 440, nodeHeight = 100, gapY = 52, gapX = 24, sidePad = 82, topPad = 28;
+    const nodeWidth = 440, nodeHeight = 100, gapY = 52, gapX = 24, sidePad = 120, topPad = 28;
     const keys = [...groups.keys()].sort((a, b) => a - b);
     const rowWidth = Math.max(nodeWidth, ...keys.map(key => groups.get(key).length * nodeWidth + (groups.get(key).length - 1) * gapX));
     const width = rowWidth + sidePad * 2;
@@ -640,8 +471,10 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
       if (!from || !to) return null;
       const fromRank = rank.get(edge.from) || 0;
       const toRank = rank.get(edge.to) || 0;
+      const back = toRank < fromRank;
+      const long = toRank > fromRank + 1;
       let sourceSide = "bottom", targetSide = "top";
-      if (toRank < fromRank) { sourceSide = "right"; targetSide = "right"; }
+      if (back || long) { sourceSide = "right"; targetSide = "right"; }
       else if (toRank === fromRank) { sourceSide = "right"; targetSide = "left"; }
       const sourceKey = edge.from + ":" + sourceSide;
       const targetKey = edge.to + ":" + targetSide;
@@ -649,39 +482,55 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
       if (!sideGroups.has(targetKey)) sideGroups.set(targetKey, []);
       sideGroups.get(sourceKey).push({ edge, end: "source" });
       sideGroups.get(targetKey).push({ edge, end: "target" });
-      return { edge, sourceSide, targetSide };
+      return { edge, fromRank, toRank, back, long, sourceSide, targetSide };
     }).filter(Boolean);
     const fraction = (nodeId, side, edge, end) => {
       const list = sideGroups.get(nodeId + ":" + side) || [];
       const index = list.findIndex(item => item.edge === edge && item.end === end);
       return (index + 1) / (list.length + 1);
     };
-    const usage = new Uint16Array(Math.ceil(width / 8 + 1) * Math.ceil(height / 8 + 1));
+    const sideEdges = edgeSides.filter(item => item.sourceSide === "right" || item.sourceSide === "left");
+    sideEdges.forEach((item, index) => {
+      item.lane = item.sourceSide === "right" ? width - 28 - (index % 5) * 16 : 28 + (index % 5) * 16;
+    });
+    const channels = new Map();
+    for (const item of edgeSides) {
+      if (item.toRank !== item.fromRank + 1 || item.sourceSide !== "bottom") continue;
+      if (!channels.has(item.fromRank)) channels.set(item.fromRank, []);
+      channels.get(item.fromRank).push(item);
+    }
+    for (const list of channels.values()) {
+      list.sort((a, b) => (byId.get(a.edge.from).x || 0) - (byId.get(b.edge.from).x || 0));
+      list.forEach((item, index) => { item.channelOffset = (index - (list.length - 1) / 2) * 8; });
+    }
     const rendered = [];
-    for (const { edge, sourceSide, targetSide } of edgeSides) {
+    for (const item of edgeSides) {
+      const { edge, sourceSide, targetSide, back, long } = item;
       const from = byId.get(edge.from), to = byId.get(edge.to);
       if (!from || !to) continue;
-      const back = (rank.get(edge.to) || 0) < (rank.get(edge.from) || 0);
       const source = portOf(from, sourceSide, fraction(edge.from, sourceSide, edge, "source"));
       const target = portOf(to, targetSide, fraction(edge.to, targetSide, edge, "target"));
-      const start = { x: source.x + source.nx * 13, y: source.y + source.ny * 13 };
-      const end = { x: target.x + target.nx * 13, y: target.y + target.ny * 13 };
-      const route = routeEdge(start, end, nodes, width, height, usage);
-      const points = route ? [{ x: source.x, y: source.y }, ...route, { x: target.x, y: target.y }] : [{ x: source.x, y: source.y }, { x: source.x, y: (source.y + target.y) / 2 }, { x: target.x, y: (source.y + target.y) / 2 }, { x: target.x, y: target.y }];
+      let points;
       let label;
-      if (back) {
-        label = { x: Math.min(width - 34, source.x + 46), y: Math.max(16, source.y - 12) };
-      } else {
-        let best = null;
-        for (let index = 0; index < points.length - 1; index += 1) {
-          const a = points[index], b = points[index + 1];
-          const length = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-          if (!best || length > best.length) best = { a, b, length };
+      if (item.toRank === item.fromRank + 1 && sourceSide === "bottom") {
+        const channelY = (from.y + from.h + to.y) / 2 + (item.channelOffset || 0);
+        if (Math.abs(source.x - target.x) < 1) {
+          points = [{ x: source.x, y: source.y }, { x: target.x, y: target.y }];
+          label = { x: source.x + 14, y: (source.y + target.y) / 2 };
+        } else {
+          points = [{ x: source.x, y: source.y }, { x: source.x, y: channelY }, { x: target.x, y: channelY }, { x: target.x, y: target.y }];
+          label = { x: (source.x + target.x) / 2, y: channelY + 12 };
         }
-        const horizontal = best ? Math.abs(best.a.y - best.b.y) < 0.6 : false;
-        label = best ? (horizontal
-          ? { x: (best.a.x + best.b.x) / 2, y: (best.a.y + best.b.y) / 2 + 12 }
-          : { x: (best.a.x + best.b.x) / 2 + 14, y: (best.a.y + best.b.y) / 2 }) : { x: 0, y: 0 };
+      } else if (item.toRank === item.fromRank) {
+        const lane = (from.x + from.w + to.x) / 2;
+        points = [{ x: source.x, y: source.y }, { x: lane, y: source.y }, { x: lane, y: target.y }, { x: target.x, y: target.y }];
+        label = { x: lane, y: Math.max(16, (source.y + target.y) / 2 - 12) };
+      } else {
+        const lane = item.lane ?? width - 40;
+        points = [{ x: source.x, y: source.y }, { x: lane, y: source.y }, { x: lane, y: target.y }, { x: target.x, y: target.y }];
+        label = (!back && long)
+          ? { x: Math.max(30, source.x - 34), y: Math.max(16, source.y - 12) }
+          : { x: Math.min(width - 30, source.x + 36), y: Math.max(16, source.y - 12) };
       }
       rendered.push({ d: roundedPath(points), lx: Math.max(30, Math.min(width - 30, label.x)), ly: Math.max(14, Math.min(height - 14, label.y)), label: edge.on || "complete" });
     }
@@ -798,10 +647,10 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
       ? '<div><strong>' + esc(STATUS[run.status] || run.status) + '</strong> · ' + completed + ' / ' + tokens.length + ' 个节点完成</div>' +
         '<div>等待人工：' + waiting.length + ' · 失败：' + tokens.filter(token => token.status === "failed").length + '</div>' +
         (run.lastError ? '<div style="color:var(--bad)">' + esc(run.lastError) + '</div>' : '')
-      : '<div>还没有运行记录。在下方填写启动参数后点“启动新运行”。</div>';
+      : '<div>还没有运行记录。工作流由助手启动；启动后这里显示状态和人工决策。</div>';
     $("runBtn").disabled = !run || run.status === "running" || busy;
     $("waiting").innerHTML = waiting.length
-      ? '<div class="waiting-title">等待决策 · ' + waiting.length + '</div><p class="waiting-help">这些是人工节点。直接选择结果即可，不需要填写 JSON，也不需要到启动参数里输入。</p>' +
+      ? '<div class="waiting-title">等待决策 · ' + waiting.length + '</div><p class="waiting-help">这些是人工节点。直接选择结果即可，不需要填写 JSON。</p>' +
         waiting.map(token => {
           const node = state.definition.nodes.find(item => item.id === token.nodeId);
           const outcomes = Array.isArray(token.outcomes) ? token.outcomes : (node?.config?.outcomes || []);
@@ -833,72 +682,6 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
       '<pre class="detail-pre">' + esc(JSON.stringify(token?.output ?? node.config ?? {}, null, 2)) + '</pre>';
   }
 
-  function inputPaths(definition) {
-    const paths = new Set();
-    const scan = value => {
-      if (typeof value === "string") {
-        const pattern = /\$input\.([A-Za-z0-9_.-]+)/g;
-        let match;
-        while ((match = pattern.exec(value))) paths.add(match[1]);
-      } else if (Array.isArray(value)) {
-        value.forEach(scan);
-      } else if (value && typeof value === "object") {
-        Object.values(value).forEach(scan);
-      }
-    };
-    for (const node of definition.nodes) {
-      scan(node.inputs);
-      scan(node.config);
-    }
-    return [...paths];
-  }
-
-  function setPath(target, path, value) {
-    const parts = path.split(".");
-    let cursor = target;
-    for (let index = 0; index < parts.length - 1; index += 1) {
-      const key = parts[index];
-      if (!cursor[key] || typeof cursor[key] !== "object") cursor[key] = {};
-      cursor = cursor[key];
-    }
-    cursor[parts[parts.length - 1]] = value;
-  }
-
-  function renderStartFields() {
-    const box = $("startFields");
-    const previous = {};
-    for (const input of box.querySelectorAll("[data-input]")) previous[input.dataset.input] = input.value;
-    const fields = inputPaths(state.definition);
-    if (!fields.length) {
-      box.innerHTML = '<p class="help">这个工作流没有声明 <code>$input.*</code> 字段，启动时使用空对象 <code>{}</code>。</p>';
-      return;
-    }
-    box.innerHTML = fields.map((path, index) => {
-      const id = "start-field-" + index;
-      return '<div class="field"><label for="' + id + '"><code>$input.' + esc(path) + "</code></label>" +
-        '<input id="' + id + '" data-input="' + esc(path) + '" value="' + esc(previous[path] || "") + '" placeholder="可选" spellcheck="false">' +
-        "</div>";
-    }).join("");
-  }
-
-  function fieldValue(text) {
-    const value = text.trim();
-    if (value === "") return undefined;
-    if (/^[[{"]/.test(value) || value === "null" || value === "true" || value === "false" || /^-?\d+(?:\.\d+)?$/.test(value)) {
-      try { return JSON.parse(value); } catch { return text; }
-    }
-    return text;
-  }
-
-  function collectStartInput() {
-    const input = {};
-    for (const field of $("startFields").querySelectorAll("[data-input]")) {
-      const value = fieldValue(field.value);
-      if (value !== undefined) setPath(input, field.dataset.input, value);
-    }
-    return input;
-  }
-
   function render() {
     if (!state) return;
     if (!state.defined) {
@@ -923,7 +706,6 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
     $("permHttp").textContent = "HTTP " + httpText;
     $("permHttp").className = "perm " + (http?.mode && http.mode !== "deny" ? "on" : "");
     $("legend").innerHTML = Object.entries(TYPE).map(([type, label]) => '<span><i style="background:' + STYLE[type].color + '"></i>' + label + "</span>").join("");
-    renderStartFields();
     renderGraph();
     renderRun();
     renderDetail();
@@ -932,12 +714,6 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
   async function action(name) {
     if (busy || !state) return;
     if (name === "refresh") return load();
-    if (name === "new") {
-      const target = $("startFields").querySelector("[data-input]") || $("startInput");
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-      target.focus();
-      return;
-    }
     if (name === "run") {
       if (!state.run?.runId) return;
       busy = true;
@@ -951,30 +727,6 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
         busy = false;
         renderRun();
       }
-    }
-  }
-
-  async function start() {
-    if (busy || !state) return;
-    let input;
-    if (advancedDirty) {
-      try { input = JSON.parse($("startInput").value || "{}"); } catch { toast("高级 JSON 不是合法 JSON", true); return; }
-    } else {
-      input = collectStartInput();
-    }
-    if (input === null || typeof input !== "object" || Array.isArray(input)) { toast("启动参数必须是 JSON 对象", true); return; }
-    busy = true;
-    $("startBtn").disabled = true;
-    try {
-      state = await postJson(API + "/start", { session: SESSION, input });
-      selected = null;
-      render();
-      toast("已启动新运行");
-    } catch (error) {
-      toast(error.message, true);
-    } finally {
-      busy = false;
-      $("startBtn").disabled = false;
     }
   }
 
@@ -994,10 +746,6 @@ textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid va
 
   $("refresh").addEventListener("click", () => action("refresh"));
   $("runBtn").addEventListener("click", () => action("run"));
-  $("newBtn").addEventListener("click", () => action("new"));
-  $("startBtn").addEventListener("click", start);
-  $("startFields").addEventListener("input", () => { advancedDirty = false; });
-  $("startInput").addEventListener("input", () => { advancedDirty = true; });
   $("zoomOut").addEventListener("click", () => zoomAt(1 / 1.2));
   $("zoomIn").addEventListener("click", () => zoomAt(1.2));
   $("fitAll").addEventListener("click", () => fitView("all"));
