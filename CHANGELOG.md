@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.6.0
+
+- Add a dedicated Human 待办 card with waiting count, notes, outcome buttons
+  and recent human decisions.
+- Expand node details with token input/output, run context, config, errors,
+  attempt/model metadata, token history and clickable upstream/downstream links.
+- Expose token input/timestamps/branch data through the board API.
+
 ## 2.5.0
 
 - Add the two-source `auto-dev-full` workflow: user requirements (priority 0,

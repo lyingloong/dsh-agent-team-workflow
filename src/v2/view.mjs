@@ -37,11 +37,15 @@ export function publicRun(state) {
       status: token.status,
       attempt: token.attempt,
       outcome: token.outcome,
+      input: token.input ?? null,
       output: token.output,
+      outputs: token.outputs ?? null,
       model: token.model ?? null,
       error: token.error,
       branch: token.branch,
       joinTokenId: token.joinTokenId,
+      createdAt: token.createdAt ?? null,
+      updatedAt: token.updatedAt ?? null,
     })),
   };
 }
