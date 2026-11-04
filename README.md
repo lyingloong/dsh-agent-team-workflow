@@ -220,21 +220,27 @@ subworkflow node completes.
 
 ## Auto-dev reference
 
-[examples/auto-dev.json](examples/auto-dev.json) is a complete requirement→PR→
-user-decision flow:
+[examples/auto-dev-full.json](examples/auto-dev-full.json) is the complete
+development flow:
 
-`discover` → `branch` → `implement` → `npm test` → `review`
-(→ implement on `needs_revision`) → open PR → human decision → merge.
+`discover` → `plan` → `Approve requirement` (human) → `branch` → `implement` →
+`npm test` → `review` (→ implement on `needs_revision` or test failure) → open PR
+→ `Review pending PR` (human) → merge. Rejecting the requirement loops back to
+discovery; rejecting the PR loops back to implementation.
 
 It requires a command grant for `npm` and `gh`, a configured `gh` login, and a
-session whose cwd is the target repository. The flow is serial: a `team_workflow_run`
-call executes it until the human node; the web board or another run call continues
-after the decision. `gh pr create` is intentionally one-shot in this example;
-re-running on a branch that already has a PR fails the `pr` node.
+session whose cwd is the target repository. The PR step is idempotent: it commits
+when there are staged changes, creates the PR only when needed, and resolves the
+existing PR URL. `team_workflow_run` executes until a human node; the web board
+or another run call continues after the decision.
 
-This is a single-seed flow. A persistent public seed pool and a pending-PR pool
-are not runtime primitives yet: each run starts from its input, and human
-decisions are per run. Use one run per seed until those queue primitives land.
+[examples/auto-dev.json](examples/auto-dev.json) is the smaller discovery →
+branch → implement → test → review → PR → human decision → merge variant.
+
+These are single-seed flows. A persistent public seed pool and a pending-PR pool
+are not runtime primitives yet: each run starts from its input, the requirement
+gate is the seed decision, and the pending PR is represented by the `pr_review`
+human node. Use one run per seed until queue primitives land.
 
 ## Web board
 

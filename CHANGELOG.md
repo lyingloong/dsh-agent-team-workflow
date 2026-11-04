@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3.0
+
+- Narrow node cards from 440 to 340 while keeping the two-line title and
+  metadata layout.
+- Add `examples/auto-dev-full.json`: a complete 10-node development flow with
+  discovery, planning, requirement approval, branch, implementation, tests,
+  review loop, idempotent PR, pending-PR review and merge.
+- Clear stored runs when a workflow definition is replaced, so an old run cannot
+  render against the new graph.
+
 ## 2.2.0
 
 - Remove the board's start-parameter form and new-run control. The assistant

@@ -143,7 +143,9 @@ function toolDefine({ storeFor }) {
         throw error;
       }
       const permissions = normalizePermissions(args?.permissions);
-      await storeFor(exec).saveDefinition({ definition, permissions });
+      const store = storeFor(exec);
+      await store.saveDefinition({ definition, permissions });
+      await store.clearRuns();
       return {
         ok: true,
         name: definition.name,
