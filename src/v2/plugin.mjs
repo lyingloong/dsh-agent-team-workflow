@@ -35,6 +35,7 @@ A workflow is nodes plus edges. Node types:
 - human: waits for a decision. Config: title?, outcomes? (default approve/reject).
 - fanout: creates one branch per item. Config: items (path), target (node id), join (join node id).
 - join: aggregates branches; its wait is internal, not a human decision. Config: mode all|any|quorum, count?.
+- gate: continuous-run switch. Passes when the session control is on; otherwise waits while the queue accumulates.
 - subworkflow: runs an inline nested definition. Config: definition.
 
 Inputs map values from "$input", "$nodes.<id>.output", "$item", "$index" or "$context".
@@ -208,8 +209,9 @@ function toolRun({ storeFor, ctx, settings, cwdOf }) {
       const definition = await store.loadDefinition();
       if (!definition) throw new Error('no workflow defined');
       const executors = createExecutors({ ctx, exec, settings, cwd: cwdOf(exec) });
+      const control = await store.loadControl();
       try {
-        await run(state, executors, { maxSteps: settings.maxSteps });
+        await run(state, executors, { maxSteps: settings.maxSteps, control });
       } catch (error) {
         state.status = 'failed';
         state.lastError = error.message;

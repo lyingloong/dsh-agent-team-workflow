@@ -56,6 +56,20 @@ test('v2 definition validates node types, edges and terminal nodes', () => {
   }), DefinitionError);
 });
 
+test('gate pauses a continuous workflow until control is enabled', async () => {
+  const flow = definition([
+    { id: 'gate', type: 'gate' },
+    { id: 'approve', type: 'human', config: { outcomes: ['approve'] } },
+  ], [{ from: 'gate', to: 'approve', on: 'complete' }]);
+  const state = newRunState({ definition: flow, permissions: DEFAULT_PERMISSIONS, input: {} });
+  await run(state, fakeExecutors(), { control: { continuous: false } });
+  assert.equal(state.status, 'waiting');
+  assert.equal(state.tokens[0].status, 'waiting');
+  assert.equal(state.tokens[0].reason, 'gate_paused');
+  await run(state, fakeExecutors(), { control: { continuous: true } });
+  assert.equal(waitingHumanTokens(state).length, 1);
+});
+
 test('human -> agent runs to completion with input mapping', async () => {
   const flow = definition([
     { id: 'seed', type: 'human', config: { outcomes: ['approve'] } },

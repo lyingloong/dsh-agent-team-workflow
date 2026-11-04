@@ -42,6 +42,7 @@ export function publicRun(state) {
       outputs: token.outputs ?? null,
       model: token.model ?? null,
       error: token.error,
+      reason: token.reason ?? null,
       branch: token.branch,
       joinTokenId: token.joinTokenId,
       createdAt: token.createdAt ?? null,

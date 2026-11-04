@@ -8,7 +8,7 @@
  */
 
 export const API_VERSION = 2;
-export const NODE_TYPES = ['agent', 'command', 'http', 'human', 'fanout', 'join', 'subworkflow'];
+export const NODE_TYPES = ['agent', 'command', 'http', 'human', 'fanout', 'join', 'gate', 'subworkflow'];
 const JOIN_MODES = ['all', 'any', 'quorum'];
 const TOP_KEYS = ['apiVersion', 'name', 'description', 'entry', 'providers', 'nodes', 'edges'];
 const NODE_KEYS = ['id', 'type', 'title', 'role', 'inputs', 'config'];
@@ -44,9 +44,6 @@ export function normalizeDefinition(raw, { depth = 0 } = {}) {
     if (!nodeIds.has(entry)) errors.push({ path: '$.entry', message: `unknown node "${entry}"` });
     const edges = readEdges(raw.edges, nodes, nodeIds, errors);
     if (edges.length === 0 && nodes.length > 1) errors.push({ path: '$.edges', message: 'a multi-node graph needs edges' });
-    if (!nodes.some(node => edges.every(edge => edge.from !== node.id))) {
-      errors.push({ path: '$.nodes', message: 'needs at least one terminal node (no outgoing edge)' });
-    }
     if (errors.length > 0) throw new DefinitionError(errors);
     return { apiVersion: API_VERSION, name, description, entry, providers, nodes, edges };
   }
