@@ -179,7 +179,7 @@ async function executeToken(state, token, executors, now) {
       token.updatedAt = now();
       return;
     }
-    completeToken(state, token, { outcome, output: result?.output ?? null });
+    completeToken(state, token, { outcome, output: result?.output ?? null, model: result?.model ?? null });
     followEdges(state, token, outcome, now);
   } catch (error) {
     if (error instanceof PermissionError) {
@@ -234,13 +234,14 @@ function executeFanout(state, token, node, now) {
   followEdges(state, token, 'complete', now);
 }
 
-function completeToken(state, token, { outcome, output }) {
+function completeToken(state, token, { outcome, output, model = null }) {
   token.status = 'completed';
   token.outcome = outcome;
   token.output = output ?? null;
+  token.model = model ?? null;
   token.updatedAt = new Date().toISOString();
   const node = state.definition.nodes.find(candidate => candidate.id === token.nodeId);
-  state.context.nodes[node?.id ?? token.nodeId] = { outcome, output: output ?? null };
+  state.context.nodes[node?.id ?? token.nodeId] = { outcome, output: output ?? null, model: model ?? null };
   if (token.joinTokenId) registerJoinArrival(state, token);
 }
 
@@ -271,6 +272,7 @@ function makeToken(node, input) {
     input,
     outcome: null,
     output: null,
+    model: null,
     error: null,
     branch: null,
     joinTokenId: null,

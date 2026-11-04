@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { apply } from '../src/v2/plugin.mjs';
+import { createExecutors } from '../src/v2/executors.mjs';
 
 function setup(t, { subagents = null } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'workflow-v2-plugin-'));
@@ -184,4 +185,55 @@ test('fan-out run reports only human decisions and reaches done', async (t) => {
   assert.equal(done.status, 'done');
   const status = await call('team_workflow_status', { runId: started.runId });
   assert.deepEqual(status.run.waiting, []);
+});
+
+test('agent nodes fall back through their ordered model list', async () => {
+  const calls = [];
+  let disposed = 0;
+  const subagents = {
+    async startActivation(spec) {
+      calls.push(spec);
+      if (calls.length === 1) {
+        return {
+          result: Promise.reject(new Error('quota exhausted')),
+          dispose: async () => { disposed += 1; },
+        };
+      }
+      return {
+        result: Promise.resolve({
+          output: [{ type: 'text', text: '{"outcome":"complete","output":{"ok":true}}' }],
+          stopReason: 'completed',
+        }),
+        dispose: async () => {},
+      };
+    },
+  };
+  const executors = createExecutors({
+    ctx: { get: () => subagents },
+    exec: { agent: { id: 'session', session: { header: { cwd: process.cwd() } } }, signal: new AbortController().signal },
+    settings: { subagentProvider: 'spawn' },
+    cwd: process.cwd(),
+  });
+  const result = await executors.agent({
+    node: {
+      id: 'worker',
+      type: 'agent',
+      config: {
+        models: [
+          { provider: 'provider-a', model: 'model-1' },
+          { provider: 'provider-b', model: 'model-2' },
+        ],
+      },
+      inputs: {},
+    },
+    input: {},
+    context: {},
+    definition: { name: 'fallback', providers: [] },
+  });
+  assert.equal(calls.length, 2);
+  assert.equal(disposed, 1);
+  assert.equal(calls[0].request.agentOptions.provider, 'provider-a');
+  assert.equal(calls[1].request.agentOptions.provider, 'provider-b');
+  assert.deepEqual(result.model, { provider: 'provider-b', model: 'model-2' });
+  assert.deepEqual(result.output, { ok: true });
 });

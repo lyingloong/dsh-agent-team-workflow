@@ -200,6 +200,30 @@ test('v2 web API lists host models and updates an agent node model', async (t) =
   assert.equal(stored.definition.nodes[0].config.provider, 'provider-a');
   const run = await store.loadRun(started.json.run.runId);
   assert.equal(run.definition.nodes[0].config.model, 'model-1');
+
+  const multi = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/node-model'), {
+    method: 'POST',
+    url: '/plugins/dsh-agent-team-workflow/api/node-model',
+    body: {
+      session: SESSION,
+      runId: started.json.run.runId,
+      nodeId: 'worker',
+      models: [
+        { provider: 'provider-a', model: 'model-1' },
+        { provider: 'provider-b', model: 'model-2' },
+      ],
+    },
+  });
+  assert.equal(multi.status, 200, JSON.stringify(multi.json));
+  assert.equal(multi.json.definition.nodes[0].config.models.length, 2);
+  assert.equal(multi.json.definition.nodes[0].config.provider, undefined);
+  const storedMulti = await store.loadDefinition();
+  assert.deepEqual(storedMulti.definition.nodes[0].config.models, [
+    { provider: 'provider-a', model: 'model-1' },
+    { provider: 'provider-b', model: 'model-2' },
+  ]);
+  const runMulti = await store.loadRun(started.json.run.runId);
+  assert.equal(runMulti.definition.nodes[0].config.models[1].model, 'model-2');
 });
 
 test('web API panel state excludes internal join waits', async (t) => {

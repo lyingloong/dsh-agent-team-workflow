@@ -154,5 +154,7 @@ test('panel exposes v2 run state, node details, decisions and permissions', () =
   assert.ok(SOURCE.includes('/models?session='));
   assert.ok(SOURCE.includes('/node-model'));
   assert.ok(SOURCE.includes('atw-model-select'));
-  assert.ok(SOURCE.includes('changeModel'));
+  assert.ok(SOURCE.includes('atw-model-row'));
+  assert.ok(SOURCE.includes('changeModels'));
+  assert.ok(SOURCE.includes('ResizeObserver'));
 });

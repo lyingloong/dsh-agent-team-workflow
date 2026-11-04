@@ -143,6 +143,24 @@ function validateNodeConfig(node, path, errors, depth) {
     if (config.lane !== undefined) text(config.lane, `${path}.config.lane`, errors, 80);
     if (config.provider !== undefined) text(config.provider, `${path}.config.provider`, errors, 120);
     if (config.model !== undefined) text(config.model, `${path}.config.model`, errors, 200);
+    if (config.models !== undefined) {
+      if (!Array.isArray(config.models)) {
+        errors.push({ path: `${path}.config.models`, message: 'must be an array' });
+      } else if (config.models.length > 8) {
+        errors.push({ path: `${path}.config.models`, message: 'must contain at most 8 models' });
+      } else {
+        for (const [index, entry] of config.models.entries()) {
+          const modelPath = `${path}.config.models[${index}]`;
+          if (!isObject(entry)) {
+            errors.push({ path: modelPath, message: 'must be an object' });
+            continue;
+          }
+          checkKeys(entry, ['provider', 'model'], modelPath, errors);
+          text(entry.provider, `${modelPath}.provider`, errors, 120);
+          text(entry.model, `${modelPath}.model`, errors, 200);
+        }
+      }
+    }
     if (config.cwd !== undefined) text(config.cwd, `${path}.config.cwd`, errors, 400);
     if (config.outcome !== undefined) text(config.outcome, `${path}.config.outcome`, errors, 80);
   } else if (node.type === 'command') {

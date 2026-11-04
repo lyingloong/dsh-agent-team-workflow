@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0
+
+- Responsive graph: the node graph now measures its stage with `ResizeObserver`
+  and scales to the available width/height, with a subtle grid, type accent and
+  node shadow.
+- Agent nodes accept an ordered `models` fallback list. On a subagent/provider
+  error the executor disposes the failed attempt and tries the next model; a
+  task `fail` outcome is still returned normally. The used model is recorded on
+  the token.
+- Panel model editor is now an ordered list with add/remove/reorder; the graph
+  shows the first model plus a `+N` fallback count.
+- API `POST /api/node-model` accepts `models` arrays; legacy `provider`/`model`
+  still works.
+- Tests at 29 passing.
+
 ## 1.2.0
 
 - New graph-first panel: compact header, stage-sized node graph, and on-demand

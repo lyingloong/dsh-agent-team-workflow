@@ -79,7 +79,8 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     }
     const provider = optionalText(body.provider);
     const model = optionalText(body.model);
-    if ((provider === null) !== (model === null)) {
+    const models = readModels(body.models);
+    if (models === null && (provider === null) !== (model === null)) {
       return sendJson(res, 400, { error: { code: 'invalid_model', message: 'provider and model must be set or cleared together' } });
     }
     let definition;
@@ -88,15 +89,7 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
         ...stored.definition,
         nodes: stored.definition.nodes.map(candidate => {
           if (candidate.id !== nodeId) return candidate;
-          const config = { ...candidate.config };
-          if (provider === null) {
-            delete config.provider;
-            delete config.model;
-          } else {
-            config.provider = provider;
-            config.model = model;
-          }
-          return { ...candidate, config };
+          return { ...candidate, config: updatedModelConfig(candidate.config, { models, provider, model }) };
         }),
       });
     } catch (error) {
@@ -107,15 +100,7 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     if (state) {
       const target = state.definition.nodes.find(candidate => candidate.id === nodeId);
       if (target) {
-        const config = { ...target.config };
-        if (provider === null) {
-          delete config.provider;
-          delete config.model;
-        } else {
-          config.provider = provider;
-          config.model = model;
-        }
-        target.config = config;
+        target.config = updatedModelConfig(target.config, { models, provider, model });
         await store.saveRun(state);
       }
     }
@@ -267,6 +252,43 @@ function optionalText(value) {
   if (typeof value !== 'string') throw Object.assign(new Error('model fields must be strings'), { code: 'invalid_model' });
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
+}
+
+function readModels(value) {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) throw Object.assign(new Error('models must be an array'), { code: 'invalid_model' });
+  if (value.length > 8) throw Object.assign(new Error('models must contain at most 8 entries'), { code: 'invalid_model' });
+  return value.map((entry, index) => {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw Object.assign(new Error(`models[${index}] must be an object`), { code: 'invalid_model' });
+    }
+    const provider = optionalText(entry.provider);
+    const model = optionalText(entry.model);
+    if (provider === null || model === null) {
+      throw Object.assign(new Error(`models[${index}] needs provider and model`), { code: 'invalid_model' });
+    }
+    return { provider, model };
+  });
+}
+
+function updatedModelConfig(config, { models, provider, model }) {
+  const next = { ...config };
+  if (models !== null) {
+    delete next.provider;
+    delete next.model;
+    if (models.length === 0) delete next.models;
+    else next.models = models;
+    return next;
+  }
+  delete next.models;
+  if (provider === null) {
+    delete next.provider;
+    delete next.model;
+  } else {
+    next.provider = provider;
+    next.model = model;
+  }
+  return next;
 }
 
 function sendJson(res, status, value) {  res.writeHead(status, {

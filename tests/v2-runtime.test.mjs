@@ -131,6 +131,19 @@ test('a handled fail outcome follows its fail edge', async () => {
   assert.equal(state.tokens.find(token => token.nodeId === 'gate').status, 'waiting');
 });
 
+test('join any completes with the first branch', async () => {
+  const flow = definition([
+    { id: 'split', type: 'fanout', config: { items: '$input.items', target: 'work', join: 'join' } },
+    { id: 'work', type: 'command', inputs: { item: '$item' }, config: { command: 'work' } },
+    { id: 'join', type: 'join', config: { mode: 'any' } },
+    { id: 'after', type: 'command', config: { command: 'after' } },
+  ], [{ from: 'join', to: 'after', on: 'complete' }]);
+  const state = newRunState({ definition: flow, permissions: FULL, input: { items: ['a', 'b'] } });
+  await run(state, fakeExecutors());
+  assert.equal(state.status, 'done');
+  assert.equal(state.context.nodes.join.output.length, 1);
+});
+
 test('http nodes enforce host allowlists', async () => {
   const flow = definition([{ id: 'fetch', type: 'http', config: { url: 'https://api.example.com/ci' } }], []);
   const allowed = newRunState({
