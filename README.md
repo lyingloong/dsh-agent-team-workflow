@@ -206,19 +206,21 @@ subworkflow node completes.
 
 ## Web panel
 
-The right-sidebar **工作流** tab shows:
+The right-sidebar **工作流** tab is graph-first:
 
-- the node graph, with node type, role and execution count;
-- the current run status, duration, token counts and permission grant;
+- a compact header with workflow name, run status, node/edge count and
+  permission state;
+- the node graph, with node type, role, execution count and agent model;
 - waiting human decisions with outcome buttons;
-- a model picker on every selected agent node, populated from the host's LLM
-  provider/model catalog; the choice is saved in the node config;
-- the selected node's config, latest token, output and errors;
-- run context and the token execution log.
+- clicking a node opens a sheet with its latest token, output, errors and raw
+  config; agent nodes include the host model picker;
+- **运行详情** opens the token log and run context; **新运行** opens the input
+  composer; **继续运行** advances a waiting/running run.
 
-Start a run, continue a waiting run, or decide a human node from the panel. The
-panel can only run a session whose Agent has been observed by a tool call; after
-a host restart, run once from the assistant or call a tool first.
+The panel deliberately stays an observer/light controller, not a workflow
+builder: the session model authors definitions through the tools. It can only
+run a session whose Agent has been observed by a tool call; after a host restart,
+run once from the assistant or call a tool first.
 
 ## Development
 
