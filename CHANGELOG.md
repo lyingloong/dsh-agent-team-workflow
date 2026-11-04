@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.0
+
+- Remove the board's start-parameter form and new-run control. The assistant
+  starts workflows; the board only observes, continues after a human decision
+  and renders run state.
+- Replace the grid A* router with layered channel routing: adjacent forward
+  edges use rank gaps, feedback edges get dedicated side lanes, and labels move
+  away from source cards.
+
 ## 2.1.0
 
 - Make the graph draggable and zoomable: wheel zoom around the pointer, drag to
