@@ -1,14 +1,12 @@
 # Changelog
 
-## 1.6.0
+## 1.6.1
 
-- Replace the hand-written SVG graph with **Cytoscape.js + dagre layout**:
-  layered automatic layout, pan/zoom/fit controls, taxi orthogonal edge
-  routing, selection, type-specific shapes and status-driven styling.
-- Node labels wrap within the card; long titles no longer truncate to one line.
-- Source lives in `src/client`; `npm run build:client` builds `lib/client.js`
-  with Rollup. The built bundle includes Cytoscape and dagre (MIT).
-- 32 tests passing.
+- Revert the 1.6.0 Cytoscape.js graph to the pre-1.6 graph implementation after
+  it looked worse in the real GUI. The 1.5.0 panel, routing, board URL and all
+  node/runtime features remain.
+- Remove the Cytoscape/dagre/Rollup build dependency and restore the hand-written
+  client bundle.
 
 ## 1.5.0
 
