@@ -3,19 +3,23 @@
  */
 
 import { describeDefinition } from './definition.mjs';
-import { humanOutcomes, waitingTokens } from './runtime.mjs';
+import { humanOutcomes, waitingHumanTokens } from './runtime.mjs';
 
 export function summarizeRun(state) {
   const failed = state.tokens.find(token => token.status === 'failed');
+  const nodes = new Map(state.definition.nodes.map(node => [node.id, node]));
   return {
     runId: state.runId,
     status: state.status,
-    waiting: waitingTokens(state).map(token => ({
-      tokenId: token.id,
-      nodeId: token.nodeId,
-      title: state.definition.nodes.find(node => node.id === token.nodeId)?.title ?? token.nodeId,
-      outcomes: humanOutcomes(state.definition.nodes.find(node => node.id === token.nodeId)),
-    })),
+    waiting: waitingHumanTokens(state).map(token => {
+      const node = nodes.get(token.nodeId);
+      return {
+        tokenId: token.id,
+        nodeId: token.nodeId,
+        title: node?.title ?? token.nodeId,
+        outcomes: humanOutcomes(node),
+      };
+    }),
     error: state.lastError ?? (failed ? `${failed.error.code}: ${failed.error.message}` : ''),
   };
 }

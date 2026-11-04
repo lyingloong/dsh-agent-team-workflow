@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Stop surfacing internal `join` waits as human decisions. The `waiting` list
+  from `team_workflow_run`, `team_workflow_status`, the panel and the Web API
+  now contains only `human` node tokens; `team_workflow_decide` rejects a join
+  token with `not_decidable` instead of completing the join early and skipping
+  its downstream nodes.
+
 ## 1.0.0
 
 The v2 node-graph runtime. This is an intentional breaking rewrite: the v1

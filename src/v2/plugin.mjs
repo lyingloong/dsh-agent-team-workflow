@@ -34,7 +34,7 @@ A workflow is nodes plus edges. Node types:
 - http: an HTTP request. Config: url, method?, headers?, body?, timeoutMs?. Requires an HTTP grant.
 - human: waits for a decision. Config: title?, outcomes? (default approve/reject).
 - fanout: creates one branch per item. Config: items (path), target (node id), join (join node id).
-- join: aggregates branches. Config: mode all|any|quorum, count?.
+- join: aggregates branches; its wait is internal, not a human decision. Config: mode all|any|quorum, count?.
 - subworkflow: runs an inline nested definition. Config: definition.
 
 Inputs map values from "$input", "$nodes.<id>.output", "$item", "$index" or "$context".
@@ -53,7 +53,7 @@ Tools:
 - team_workflow_start: create a run with an input object.
 - team_workflow_run: execute ready nodes until the run waits or finishes.
 - team_workflow_decide: resolve a waiting human node with an outcome.
-- team_workflow_status: show definition/run summary and waiting tokens.`;
+- team_workflow_status: show definition/run summary and waiting human decisions.`;
 
 export function apply(ctx, config = {}) {
   const settings = resolveSettings(config);
@@ -243,7 +243,7 @@ function toolDecide({ storeFor }) {
 function toolStatus({ storeFor }) {
   return {
     name: 'team_workflow_status',
-    description: 'Show the stored v2 definition summary and the latest run: status, waiting tokens and token counts.',
+    description: 'Show the stored v2 definition summary and the latest run: status, waiting human decisions and token counts.',
     parameters: objectSchema({ runId: stringSchema('Optional run id; defaults to the latest run.') }, []),
     output: {
       schema: objectSchema({
