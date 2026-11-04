@@ -269,7 +269,8 @@ DSH Connection authentication fence; it is not a second server or port. The page
 shows a full-height graph fitted to the available space, with wider cards,
 scroll preservation and a selected-only node detail card; it can start a run,
 continue a run and decide waiting humans (the latter uses the last Agent observed
-for the session). The side panel header has a `↗` action to open it.
+for the session). The side panel header has a `↗` link, and the conversation
+header has a `看板` action beside `工作流`; both open the board in a new page.
 
 ![Standalone board preview](docs/board-preview.png)
 
