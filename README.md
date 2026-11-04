@@ -247,14 +247,18 @@ The board is graph-first:
   permission state;
 - a node graph with a word-aware two-line title, role/model or command/HTTP
   detail, status dot and run count; node types keep their own glyph and accent;
-- orthogonal edges route with an A* grid around node rectangles, so they do not
-  pass through cards; outcome labels sit beside their lines;
+- drag the graph to pan, use the wheel to zoom around the pointer, and use the
+  graph controls for fit/actual-size; orthogonal edges route with an A* grid
+  around node rectangles, so they do not pass through cards; outcome labels sit
+  beside their lines;
 - clicking a node opens its detail card **below the graph**, with latest token,
   output, errors and raw config;
 - the **运行** card shows run progress and waiting human decisions. Human nodes
   are decided with outcome buttons only; no JSON input is needed there;
-- the **启动参数** card is explicitly the workflow's `$input`, not human input;
-  leave `{}` when the workflow needs no parameters.
+- the **启动参数** card builds fields from the workflow's `$input.*` references,
+  so auto-dev shows a `goal` field; it is not human input, and an advanced JSON
+  editor remains for arbitrary objects. Leave fields empty when the workflow
+  needs no parameters.
 
 The board deliberately stays an observer/light controller, not a workflow
 builder: the session model authors definitions through the tools. It can only

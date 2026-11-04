@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0
+
+- Make the graph draggable and zoomable: wheel zoom around the pointer, drag to
+  pan, and controls for zoom out/in, fit, and actual size.
+- Build the start-parameter form from the workflow's `$input.*` references
+  instead of showing a bare `{}` textarea; keep an advanced JSON editor.
+- Clarify that start parameters are workflow input, not human decision input.
+
 ## 2.0.0
 
 - Remove the right-sidebar workflow panel. The conversation header now has one

@@ -1,6 +1,6 @@
 {
   "name": "dsh-agent-team-workflow",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": false,
   "description": "DSH plugin for user-defined node-graph workflows: agent, command, HTTP, human, fan-out/join and subworkflow nodes with permissions, artifacts and a live web board.",
   "type": "module",
