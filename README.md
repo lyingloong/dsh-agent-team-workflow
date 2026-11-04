@@ -266,9 +266,12 @@ The same board is available as an optional browser page:
 
 `team_workflow_status` returns this as `boardUrl`. It is same-origin and uses the
 DSH Connection authentication fence; it is not a second server or port. The page
-can view the graph, node details, waiting decisions, start a run and continue a
-run (the latter uses the last Agent observed for that session, same as the side
-panel).
+shows a full-height graph fitted to the available space, with wider cards,
+scroll preservation and a selected-only node detail card; it can start a run,
+continue a run and decide waiting humans (the latter uses the last Agent observed
+for the session). The side panel header has a `↗` action to open it.
+
+![Standalone board preview](docs/board-preview.png)
 
 ## Development
 

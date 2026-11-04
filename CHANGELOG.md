@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.0
+
+- Polish the standalone board: a full-height graph fitted to the available
+  space, wider cards with word-aware wrapping, status dots, muted completed
+  borders, back-edge labels placed near their source, preserved scroll position,
+  and a node-detail card that only appears after selection.
+- Add a `↗` action in the side panel header that opens the standalone board URL.
+- The side-panel graph is unchanged; the standalone HTML board is the primary
+  visual surface for now.
+
 ## 1.6.1
 
 - Revert the 1.6.0 Cytoscape.js graph to the pre-1.6 graph implementation after
