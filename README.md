@@ -256,22 +256,35 @@ builder: the session model authors definitions through the tools. It can only
 run a session whose Agent has been observed by a tool call; after a host restart,
 run once from the assistant or call a tool first.
 
-## Standalone board URL
+## Board URL and native Browser tab
 
-The same board is available as an optional browser page:
+The board is served by the plugin's existing web server. The sidebar opens it
+through DSH's native Browser tab:
+
+```js
+ctx.sidebarRight.openTab('browser', { params: { url } })
+```
+
+The Browser tab refuses URLs on the DSH application origin, so the status URL
+uses the alternate loopback host (`localhost` vs `127.0.0.1`) and a random
+token:
 
 ```
-<Harness origin>/plugins/dsh-agent-team-workflow/board?session=<session-id>
+http://localhost:<port>/plugins/dsh-agent-team-workflow/public/board?session=<session-id>&token=<token>
 ```
 
-`team_workflow_status` returns this as `boardUrl`. It is same-origin and uses the
-DSH Connection authentication fence; it is not a second server or port. The page
-shows a full-height graph fitted to the available space, with wider cards,
-scroll preservation and a selected-only node detail card; it can start a run,
-continue a run and decide waiting humans (the latter uses the last Agent observed
-for the session). The side panel header has a `↗` action, and the conversation
-header has a `看板` action beside `工作流`; both open an in-app full-screen
-iframe overlay (with a `当前页打开` fallback if the host blocks the iframe).
+`team_workflow_status` returns this as `boardUrl`. The public route is
+token-protected and loopback-only; it intentionally bypasses the DSH Connection
+fence because the Browser tab cannot send the application origin/cookies. It is
+the same web server and port, not a second server. Do not share the URL: the
+token grants board access.
+
+The page shows a full-height graph fitted to the available space, with wider
+cards, scroll preservation and a selected-only node detail card; it can start a
+run, continue a run and decide waiting humans (the latter uses the last Agent
+observed for the session). The side panel header has a `↗` action, and the
+conversation header has a `看板` action beside `工作流`; both open the native
+Browser tab, with an in-app overlay fallback if that tab type is unavailable.
 
 ![Standalone board preview](docs/board-preview.png)
 

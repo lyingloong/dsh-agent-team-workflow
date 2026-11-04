@@ -76,6 +76,9 @@ test('client registers the right-sidebar tab and opens it from the conversation 
   assert.ok(SOURCE.includes('openBoardOverlay'));
   assert.ok(SOURCE.includes('BOARD_OVERLAY_ID'));
   assert.ok(SOURCE.includes('当前页打开'));
+  assert.ok(SOURCE.includes('openBoardEntry'));
+  assert.ok(SOURCE.includes('/api/board-url'));
+  assert.ok(SOURCE.includes('openTab("browser"'));
   assert.ok(SOURCE.includes('sessionId'));
 });
 
