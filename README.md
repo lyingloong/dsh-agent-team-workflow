@@ -177,6 +177,11 @@ Start with `{"items": [1, 2, 3]}`. The fanout node creates three tokens at
 `work`; each sees `$item` and `$index`. `join` waits according to its mode, then
 its output is the aggregated branch array.
 
+A join waits internally for its branches; that wait is not a human decision. The
+`waiting` list from `team_workflow_run`, `team_workflow_status`, the panel and the
+Web API contains only `human` node tokens, and `team_workflow_decide` rejects a
+join token with `not_decidable`.
+
 ## Sub-workflow
 
 ```json

@@ -86,6 +86,10 @@ export function decide(state, { tokenId, outcome, output = null, now = new Date(
   const token = state.tokens.find(candidate => candidate.id === tokenId);
   if (!token || token.status !== 'waiting') throw new RuntimeError('not_waiting', `token ${tokenId} is not waiting`);
   const node = state.definition.nodes.find(candidate => candidate.id === token.nodeId);
+  if (node?.type !== 'human') {
+    const subject = node ? `${node.type} node "${node.id}"` : 'an unknown node';
+    throw new RuntimeError('not_decidable', `token ${tokenId} is not a human decision: it belongs to ${subject}`);
+  }
   const allowed = humanOutcomes(node);
   if (!allowed.includes(outcome)) throw new RuntimeError('unknown_outcome', `expected one of ${allowed.join(', ')}`);
   completeToken(state, token, { outcome, output });
@@ -100,8 +104,18 @@ export function humanOutcomes(node) {
   return Array.isArray(configured) && configured.length > 0 ? configured : ['approve', 'reject'];
 }
 
+/** Raw waiting tokens, including internal fan-out join tokens; use waitingHumanTokens for decisions. */
 export function waitingTokens(state) {
   return state.tokens.filter(token => token.status === 'waiting');
+}
+
+/**
+ * Waiting tokens that need a human decision. Join tokens wait internally for
+ * their branches and are deliberately excluded.
+ */
+export function waitingHumanTokens(state) {
+  const humanNodes = new Set(state.definition.nodes.filter(node => node.type === 'human').map(node => node.id));
+  return waitingTokens(state).filter(token => humanNodes.has(token.nodeId));
 }
 
 async function executeToken(state, token, executors, now) {
