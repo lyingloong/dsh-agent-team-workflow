@@ -7,6 +7,7 @@
  */
 
 import path from 'node:path';
+import { normalizeDefinition } from './definition.mjs';
 import { SessionStore } from './store.mjs';
 import { DEFAULT_PERMISSIONS, decide, newRunState, run } from './runtime.mjs';
 import { panelState } from './view.mjs';
@@ -58,8 +59,70 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     sendJson(res, 200, panelState(stored, state));
   });
 
-  route('/api/start', async (req, res) => {
+  route('/api/models', async (req, res) => {
+    const url = new URL(req.url ?? '/', 'http://local');
+    const store = storeFor(url.searchParams.get('session'));
+    const stored = await store.loadDefinition();
+    sendJson(res, 200, await readModelCatalog(ctx, stored?.definition));
+  });
+
+  route('/api/node-model', async (req, res) => {
     const body = await readJson(req);
+    const store = storeFor(body.session);
+    const stored = await store.loadDefinition();
+    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
+    const nodeId = requireText(body.nodeId, 'nodeId');
+    const node = stored.definition.nodes.find(candidate => candidate.id === nodeId);
+    if (!node) return sendJson(res, 404, { error: { code: 'no_node', message: `unknown node ${nodeId}` } });
+    if (node.type !== 'agent') {
+      return sendJson(res, 400, { error: { code: 'not_model_node', message: `node ${nodeId} does not use a model` } });
+    }
+    const provider = optionalText(body.provider);
+    const model = optionalText(body.model);
+    if ((provider === null) !== (model === null)) {
+      return sendJson(res, 400, { error: { code: 'invalid_model', message: 'provider and model must be set or cleared together' } });
+    }
+    let definition;
+    try {
+      definition = normalizeDefinition({
+        ...stored.definition,
+        nodes: stored.definition.nodes.map(candidate => {
+          if (candidate.id !== nodeId) return candidate;
+          const config = { ...candidate.config };
+          if (provider === null) {
+            delete config.provider;
+            delete config.model;
+          } else {
+            config.provider = provider;
+            config.model = model;
+          }
+          return { ...candidate, config };
+        }),
+      });
+    } catch (error) {
+      return sendJson(res, 400, { error: { code: error.code ?? 'invalid_definition', message: error.message } });
+    }
+    await store.saveDefinition({ definition, permissions: stored.permissions });
+    let state = await loadState(store, body.runId);
+    if (state) {
+      const target = state.definition.nodes.find(candidate => candidate.id === nodeId);
+      if (target) {
+        const config = { ...target.config };
+        if (provider === null) {
+          delete config.provider;
+          delete config.model;
+        } else {
+          config.provider = provider;
+          config.model = model;
+        }
+        target.config = config;
+        await store.saveRun(state);
+      }
+    }
+    sendJson(res, 200, { ...panelState({ definition, permissions: stored.permissions }, state), models: await readModelCatalog(ctx, definition) });
+  });
+
+  route('/api/start', async (req, res) => {    const body = await readJson(req);
     const store = storeFor(body.session);
     const stored = await store.loadDefinition();
     if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
@@ -151,8 +214,62 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
   return { routes, attach };
 }
 
-function sendJson(res, status, value) {
-  res.writeHead(status, {
+async function readModelCatalog(ctx, definition) {
+  const providers = new Map();
+  const addProvider = (id, name) => {
+    if (typeof id !== 'string' || id === '') return null;
+    if (!providers.has(id)) providers.set(id, { id, name: typeof name === 'string' && name !== '' ? name : id, models: [] });
+    return providers.get(id);
+  };
+  const addModel = (provider, model) => {
+    if (!model || typeof model.id !== 'string' || model.id === '') return;
+    if (provider.models.some(existing => existing.id === model.id)) return;
+    provider.models.push({
+      id: model.id,
+      name: typeof model.name === 'string' && model.name !== '' ? model.name : model.id,
+      ...(typeof model.description === 'string' ? { description: model.description } : {}),
+    });
+  };
+
+  const llm = ctx.get?.('llm');
+  if (llm && typeof llm.listProviders === 'function') {
+    try {
+      const list = await llm.listProviders();
+      for (const entry of Array.isArray(list) ? list : []) {
+        const provider = addProvider(entry.id, entry.name);
+        if (!provider || typeof llm.listModels !== 'function') continue;
+        const models = await Promise.resolve(llm.listModels(entry.id)).catch(() => []);
+        for (const model of Array.isArray(models) ? models : []) addModel(provider, model);
+      }
+    } catch {
+      // The catalog is advisory; the definition's lanes below still provide fallback entries.
+    }
+  }
+  for (const lane of definition?.providers ?? []) {
+    if (typeof lane.adapter !== 'string' || lane.adapter === '') continue;
+    const provider = addProvider(lane.adapter, lane.adapter);
+    if (provider && typeof lane.model === 'string' && lane.model !== '' && lane.model !== 'host-default') {
+      addModel(provider, { id: lane.model, name: lane.model });
+    }
+  }
+
+  let defaultSelection = null;
+  try {
+    defaultSelection = ctx.get?.('agentDefaultModel')?.currentSelection?.() ?? null;
+  } catch {
+    // A host without a default selection still shows the discovered list.
+  }
+  return { providers: [...providers.values()], default: defaultSelection };
+}
+
+function optionalText(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') throw Object.assign(new Error('model fields must be strings'), { code: 'invalid_model' });
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+function sendJson(res, status, value) {  res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',

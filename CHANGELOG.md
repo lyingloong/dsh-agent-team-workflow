@@ -1,7 +1,17 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
+- Add a model picker to every agent node in the panel. The list comes from the
+  host `llm` provider/model catalog (`GET /api/models`); selecting an entry
+  saves `provider`/`model` into the node config and updates the active run
+  (`POST /api/node-model`).
+- Agent execution now prefers explicit `provider`/`model` over the lane's
+  `adapter`/`model`; `host-default` still means "inherit the host model".
+- Make `normalizeDefinition` idempotent for normalized definitions (nullable
+  title/role/provider fields), which the model update route relies on.
+- Keep the model picker out of non-agent nodes; command/HTTP/human nodes have no
+  model selection.
 - Stop surfacing internal `join` waits as human decisions. The `waiting` list
   from `team_workflow_run`, `team_workflow_status`, the panel and the Web API
   now contains only `human` node tokens; `team_workflow_decide` rejects a join

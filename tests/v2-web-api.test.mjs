@@ -21,6 +21,14 @@ const FLOW = normalizeDefinition({
   edges: [{ from: 'seed', to: 'run', on: 'approve' }],
 });
 
+const MODEL_FLOW = normalizeDefinition({
+  apiVersion: 2,
+  name: 'model-api-flow',
+  entry: 'worker',
+  nodes: [{ id: 'worker', type: 'agent', config: { prompt: 'work' } }],
+  edges: [],
+});
+
 const FANOUT_FLOW = normalizeDefinition({
   apiVersion: 2,
   name: 'fanout-api-flow',
@@ -52,6 +60,21 @@ function setup(t) {
         };
       }
       if (name === 'connection') return { requestRejection: () => undefined };
+      if (name === 'llm') {
+        return {
+          async listProviders() {
+            return [{ id: 'provider-a', name: 'Provider A' }];
+          },
+          async listModels(provider) {
+            return provider === 'provider-a'
+              ? [{ provider, id: 'model-1', name: 'Model One' }]
+              : [];
+          },
+        };
+      }
+      if (name === 'agentDefaultModel') {
+        return { currentSelection: () => ({ provider: 'provider-a', model: 'model-1' }) };
+      }
       return undefined;
     },
     effect(fn) {
@@ -98,6 +121,8 @@ test('v2 web API supports state, start, decide and run', async (t) => {
   const { routes, store } = setup(t);
   assert.deepEqual([...routes.keys()].sort(), [
     '/plugins/dsh-agent-team-workflow/api/decide',
+    '/plugins/dsh-agent-team-workflow/api/models',
+    '/plugins/dsh-agent-team-workflow/api/node-model',
     '/plugins/dsh-agent-team-workflow/api/run',
     '/plugins/dsh-agent-team-workflow/api/start',
     '/plugins/dsh-agent-team-workflow/api/state',
@@ -142,6 +167,39 @@ test('v2 web API supports state, start, decide and run', async (t) => {
   });
   assert.equal(done.status, 200);
   assert.equal(done.json.run.status, 'done');
+});
+
+test('v2 web API lists host models and updates an agent node model', async (t) => {
+  const { routes, store } = setup(t);
+  await store.saveDefinition({ definition: MODEL_FLOW, permissions: {} });
+  const started = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/start'), {
+    method: 'POST',
+    url: '/plugins/dsh-agent-team-workflow/api/start',
+    body: { session: SESSION, input: {} },
+  });
+  assert.equal(started.status, 201);
+
+  const catalog = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/models'), {
+    url: `/plugins/dsh-agent-team-workflow/api/models?session=${SESSION}`,
+  });
+  assert.equal(catalog.status, 200);
+  assert.equal(catalog.json.providers[0].id, 'provider-a');
+  assert.equal(catalog.json.providers[0].models[0].id, 'model-1');
+  assert.deepEqual(catalog.json.default, { provider: 'provider-a', model: 'model-1' });
+
+  const updated = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/node-model'), {
+    method: 'POST',
+    url: '/plugins/dsh-agent-team-workflow/api/node-model',
+    body: { session: SESSION, runId: started.json.run.runId, nodeId: 'worker', provider: 'provider-a', model: 'model-1' },
+  });
+  assert.equal(updated.status, 200, JSON.stringify(updated.json));
+  assert.equal(updated.json.definition.nodes[0].config.provider, 'provider-a');
+  assert.equal(updated.json.definition.nodes[0].config.model, 'model-1');
+
+  const stored = await store.loadDefinition();
+  assert.equal(stored.definition.nodes[0].config.provider, 'provider-a');
+  const run = await store.loadRun(started.json.run.runId);
+  assert.equal(run.definition.nodes[0].config.model, 'model-1');
 });
 
 test('web API panel state excludes internal join waits', async (t) => {

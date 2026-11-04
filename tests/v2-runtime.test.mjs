@@ -41,6 +41,7 @@ test('v2 definition validates node types, edges and terminal nodes', () => {
   ], [{ from: 'a', to: 'b', on: 'approve' }]);
   assert.equal(flow.apiVersion, 2);
   assert.equal(flow.nodes.length, 2);
+  assert.deepEqual(normalizeDefinition(flow), flow);
   assert.throws(() => normalizeDefinition({
     apiVersion: 2,
     name: 'bad',

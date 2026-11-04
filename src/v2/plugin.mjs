@@ -29,7 +29,7 @@ const DEFAULT_CONFIG = {
 const USAGE = `Agent Team Workflow v2 is a node-graph workflow engine.
 
 A workflow is nodes plus edges. Node types:
-- agent: a model subagent. Config: prompt?, lane?, outcome?, outcomes?; optional role label.
+- agent: a model subagent. Config: prompt?, lane?, provider?, model?, outcome?, outcomes?; optional role label. The panel can pick provider/model for each agent node.
 - command: a shell command. Config: command, cwd?, timeoutMs?. Requires a command permission grant.
 - http: an HTTP request. Config: url, method?, headers?, body?, timeoutMs?. Requires an HTTP grant.
 - human: waits for a decision. Config: title?, outcomes? (default approve/reject).
