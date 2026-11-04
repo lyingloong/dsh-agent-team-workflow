@@ -223,24 +223,33 @@ subworkflow node completes.
 [examples/auto-dev-full.json](examples/auto-dev-full.json) is the complete
 development flow:
 
-`discover` → `plan` → `Approve requirement` (human) → `branch` → `implement` →
-`npm test` → `review` (→ implement on `needs_revision` or test failure) → open PR
-→ `Review pending PR` (human) → merge. Rejecting the requirement loops back to
-discovery; rejecting the PR loops back to implementation.
+`Requirement analyst` → `plan` → `Approve requirement` (human) → `branch` →
+`implement` → `npm test` → `review` (→ implement on `needs_revision` or test
+failure) → open PR → `Review pending PR` (human) → merge. Rejecting the
+requirement loops back to the analyst; rejecting the PR loops back to
+implementation.
 
-It requires a command grant for `npm` and `gh`, a configured `gh` login, and a
-session whose cwd is the target repository. The PR step is idempotent: it commits
-when there are staged changes, creates the PR only when needed, and resolves the
-existing PR URL. `team_workflow_run` executes until a human node; the web board
-or another run call continues after the decision.
+The requirement analyst owns the seed pool through its system prompt and its
+allowed file scope: it reads `requirements/seeds.json` (or `poolPath` from the
+run input), selects the highest-priority `ready` seed, and may only mark that
+seed `claimed`. The pool is a normal repository file, not a runtime queue; a
+sample schema is in [docs/requirements-seeds.json](examples/requirements-seeds.json).
+The pending-PR pool is GitHub's open PR list; the `Review pending PR` human node
+is the serial review gate for the current PR.
+
+It requires a command grant for `git`, `npm` and `gh` (the workflow is defined
+with that allowlist), a configured `gh` login, and a session whose cwd is the
+target repository. The PR step is idempotent: it commits when there are staged
+changes, creates the PR only when needed, and resolves the existing PR URL.
+`team_workflow_run` executes until a human node; the web board or another run
+call continues after the decision.
 
 [examples/auto-dev.json](examples/auto-dev.json) is the smaller discovery →
 branch → implement → test → review → PR → human decision → merge variant.
 
-These are single-seed flows. A persistent public seed pool and a pending-PR pool
-are not runtime primitives yet: each run starts from its input, the requirement
-gate is the seed decision, and the pending PR is represented by the `pr_review`
-human node. Use one run per seed until queue primitives land.
+The pool is not a persistent queue primitive: each run selects one seed. The
+analyst's prompt and permission scope are the pool policy; the actual ready
+seeds stay in the repository file.
 
 ## Web board
 
