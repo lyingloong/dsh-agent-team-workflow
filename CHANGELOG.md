@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.0
+
+- Make the requirement analyst own a seed pool through its prompt and file
+  scope: read `requirements/seeds.json` or `poolPath`, select one ready seed,
+  and only mark that seed claimed.
+- Add a sample seed-pool schema at `docs/requirements-seeds.json`.
+- Define `auto-dev-full` with a `git`/`npm`/`gh` command allowlist instead of a
+  full command grant; the pending PR remains the human PR gate.
+
 ## 2.3.0
 
 - Narrow node cards from 440 to 340 while keeping the two-line title and

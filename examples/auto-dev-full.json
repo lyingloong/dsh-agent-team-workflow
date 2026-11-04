@@ -1,17 +1,17 @@
 {
   "apiVersion": 2,
   "name": "auto-dev-full",
-  "description": "One complete development flow: discover a requirement, approve it, implement, test, review with a revision loop, open a PR, decide the pending PR, and merge.",
+  "description": "One complete development flow: the requirement analyst owns the seed pool, selects one requirement, then plan, implementation, tests, review, PR and merge gates run in sequence.",
   "entry": "discover",
   "nodes": [
     {
       "id": "discover",
       "type": "agent",
-      "title": "Discover requirement",
+      "title": "Requirement analyst",
       "role": "analyst",
-      "inputs": { "goal": "$input.goal" },
+      "inputs": { "goal": "$input.goal", "poolPath": "$input.poolPath" },
       "config": {
-        "prompt": "Inspect the repository and choose exactly one small, high-value improvement. Do not edit files. Return JSON with title, body, acceptance (array), files (array), and plan (string)."
+        "prompt": "You own the requirement seed pool. Read the poolPath value from the Input JSON when present; otherwise try requirements/seeds.json, then docs/requirements*.json or REQUIREMENTS.md. The pool is JSON: [{id,title,status,priority,acceptance,body}]. Choose exactly one seed with status ready, highest priority first; if the pool is absent, propose exactly one small repository improvement from the current tree. Do not edit application code. You may update only the selected seed's status to claimed and record the run id; never edit the pool's other seeds. Return JSON {seedId,poolPath,title,body,acceptance,files,plan}. If nothing is ready, return {blocked:true,reason}."
       }
     },
     {
