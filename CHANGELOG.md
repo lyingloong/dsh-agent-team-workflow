@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0
+
+- New graph-first panel: compact header, stage-sized node graph, and on-demand
+  sheets for node detail, run detail/context and new-run input.
+- Removed the dashboard-style hero stats, always-visible token list and context
+  block; they are now behind **运行详情** or only shown for the selected node.
+- Agent nodes show their current model on the graph and in the node sheet; the
+  host model picker now surfaces loading/error state instead of silently
+  disabling.
+- Panel remains read-only for workflow structure; node config is shown as JSON.
+  The session model remains the author of definitions.
+
 ## 1.1.1
 
 - Forward an agent node's `config.cwd` to the DSH subagent request, so a workflow

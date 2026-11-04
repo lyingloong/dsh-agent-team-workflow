@@ -146,7 +146,8 @@ test('panel exposes v2 run state, node details, decisions and permissions', () =
   assert.ok(SOURCE.includes('run?.waiting'));
   assert.ok(SOURCE.includes('run?.tokens'));
   assert.ok(!SOURCE.includes('atw-progress'));
-  assert.ok(SOURCE.includes('atw-banner'));
+  assert.ok(SOURCE.includes('atw-waiting'));
+  assert.ok(SOURCE.includes('atw-sheet'));
   assert.ok(SOURCE.includes('atw-permissions'));
   assert.ok(SOURCE.includes('atw-token'));
   assert.ok(SOURCE.includes('command') && SOURCE.includes('http'));
