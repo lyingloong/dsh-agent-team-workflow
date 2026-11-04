@@ -9,3 +9,4 @@ import './v2-runtime.test.mjs';
 import './v2-plugin.test.mjs';
 import './v2-web-api.test.mjs';
 import './client-bundle.test.mjs';
+import './examples.test.mjs';

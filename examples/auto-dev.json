@@ -1,0 +1,94 @@
+{
+  "apiVersion": 2,
+  "name": "auto-dev",
+  "description": "Discover one requirement, implement it on a branch, run tests, review, open a PR, and let the user decide whether to merge.",
+  "entry": "discover",
+  "nodes": [
+    {
+      "id": "discover",
+      "type": "agent",
+      "title": "Discover requirement",
+      "role": "analyst",
+      "inputs": { "goal": "$input.goal" },
+      "config": {
+        "prompt": "Inspect the repository and choose exactly one small, high-value improvement. Do not edit files. Return JSON with title, body, acceptance (array), and files (array)."
+      }
+    },
+    {
+      "id": "branch",
+      "type": "command",
+      "title": "Create branch",
+      "config": {
+        "command": "git switch auto/auto-dev || git switch -c auto/auto-dev",
+        "timeoutMs": 60000
+      }
+    },
+    {
+      "id": "implement",
+      "type": "agent",
+      "title": "Implement",
+      "role": "engineer",
+      "inputs": { "requirement": "$nodes.discover.output", "review": "$nodes.review.output" },
+      "config": {
+        "prompt": "Implement the requirement in the current repository. Follow AGENTS.md. Do not commit, push or open a PR; command nodes handle that. Return JSON with summary and changed paths."
+      }
+    },
+    {
+      "id": "verify",
+      "type": "command",
+      "title": "Run tests",
+      "config": { "command": "npm test", "timeoutMs": 600000 }
+    },
+    {
+      "id": "review",
+      "type": "agent",
+      "title": "Review",
+      "role": "reviewer",
+      "inputs": {
+        "requirement": "$nodes.discover.output",
+        "implementation": "$nodes.implement.output",
+        "tests": "$nodes.verify.output"
+      },
+      "config": {
+        "outcomes": ["pass", "needs_revision"],
+        "prompt": "Review the working tree against the requirement and test result. Use pass only when no required change remains. Return JSON {\"outcome\":\"pass|needs_revision\",\"output\":...}."
+      }
+    },
+    {
+      "id": "pr",
+      "type": "command",
+      "title": "Open PR",
+      "config": {
+        "command": "git add -A && git commit -m \"auto: requirement implementation\" && git push -u origin auto/auto-dev && gh pr create --fill",
+        "timeoutMs": 600000
+      }
+    },
+    {
+      "id": "user_review",
+      "type": "human",
+      "title": "User decision",
+      "config": { "outcomes": ["approve", "reject"] }
+    },
+    {
+      "id": "merge",
+      "type": "command",
+      "title": "Merge PR",
+      "config": {
+        "command": "gh pr merge auto/auto-dev --merge",
+        "timeoutMs": 300000
+      }
+    }
+  ],
+  "edges": [
+    { "from": "discover", "to": "branch", "on": "complete" },
+    { "from": "branch", "to": "implement", "on": "complete" },
+    { "from": "implement", "to": "verify", "on": "complete" },
+    { "from": "verify", "to": "review", "on": "complete" },
+    { "from": "verify", "to": "implement", "on": "fail" },
+    { "from": "review", "to": "pr", "on": "pass" },
+    { "from": "review", "to": "implement", "on": "needs_revision" },
+    { "from": "pr", "to": "user_review", "on": "complete" },
+    { "from": "user_review", "to": "merge", "on": "approve" },
+    { "from": "user_review", "to": "discover", "on": "reject" }
+  ]
+}
