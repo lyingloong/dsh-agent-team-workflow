@@ -221,21 +221,45 @@ subworkflow node completes.
 ## Auto-dev reference
 
 [examples/auto-dev-full.json](examples/auto-dev-full.json) is the complete
-development flow:
+two-source development flow:
 
-`Requirement analyst` → `plan` → `Approve requirement` (human) → `branch` →
-`implement` → `npm test` → `review` (→ implement on `needs_revision` or test
-failure) → open PR → `Review pending PR` (human) → merge. Rejecting the
-requirement loops back to the analyst; rejecting the PR loops back to
-implementation.
+```text
+Intake requirement
+  ├─ user  ─────────────────────────────→ Record requirement
+  └─ mined → Requirement analyst → risk
+       ├─ low  ────────────────────────→ Record requirement
+       └─ mid/high → Approve mined requirement (human)
+             ├─ approve ───────────────→ Record requirement
+             └─ reject → Requirement analyst (rework with note)
+Record requirement
+  → Plan implementation → branch → Implement → npm test → Review
+      ├─ needs_revision / test fail → Implement
+      └─ pass → Open PR → Human review pool (human/AI)
+            ├─ approve → Merge PR
+            └─ reject → Implement (with note)
+```
 
-The requirement analyst owns the seed pool through its system prompt and its
-allowed file scope: it reads `requirements/seeds.json` (or `poolPath` from the
-run input), selects the highest-priority `ready` seed, and may only mark that
-seed `claimed`. The pool is a normal repository file, not a runtime queue; a
-sample schema is in [docs/requirements-seeds.json](examples/requirements-seeds.json).
-The pending-PR pool is GitHub's open PR list; the `Review pending PR` human node
-is the serial review gate for the current PR.
+Requirement rules:
+
+- **User-provided requirements** have `source=user`, `priority=0`, are recorded
+  in `requirements/requirements.json`, and bypass requirement approval.
+  `addToSeedPool` can optionally add related seed entries.
+- **Mined requirements** come from the analyst's seed pool. The analyst reads
+  `poolPath` or `requirements/seeds.json`, chooses one `ready` seed and may only
+  mark it `claimed`.
+- A separate risk agent emits `low`, `mid` or `high`. Low risk records directly;
+  mid/high wait at the human `Approve mined requirement` node. Rejecting it, or
+  asking for adjustments, sends it back to the analyst with the note.
+- Requirements and seeds carry tags; the analyst/register prompts own the pool
+  files. Pools are repository data plus prompt policy, not runtime queues.
+  Sample data: [docs/requirements.json](docs/requirements.json) and
+  [docs/requirements-seeds.json](docs/requirements-seeds.json).
+
+The reviewer agent either sends the change back to implementation or opens the
+PR. The PR then waits in the `Human review pool` node. A human or an external AI
+with access to `team_workflow_decide` can approve/reject; the board also offers a
+note field, and the note is passed to implementation. GitHub PR comments remain
+the place for threaded PR feedback.
 
 It requires a command grant for `git`, `npm` and `gh` (the workflow is defined
 with that allowlist), a configured `gh` login, and a session whose cwd is the
@@ -247,9 +271,8 @@ call continues after the decision.
 [examples/auto-dev.json](examples/auto-dev.json) is the smaller discovery →
 branch → implement → test → review → PR → human decision → merge variant.
 
-The pool is not a persistent queue primitive: each run selects one seed. The
-analyst's prompt and permission scope are the pool policy; the actual ready
-seeds stay in the repository file.
+Each run selects one seed; the pools are not persistent queues, and one PR is
+reviewed at a time.
 
 ## Web board
 

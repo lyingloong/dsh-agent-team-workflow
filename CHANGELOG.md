@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.5.0
+
+- Add the two-source `auto-dev-full` workflow: user requirements (priority 0,
+  no requirement approval) and mined requirements (analyst → risk; low bypasses,
+  mid/high require human approval, reject reworks the analyst).
+- Add a requirement registry prompt and a human/AI PR review pool; review notes
+  flow back to implementation, requirement-review notes flow back to the analyst.
+- Add a freeform note field to human decisions on the board; the note is sent as
+  the decision output.
+- Add sample requirement-list and seed-pool data.
+
 ## 2.4.0
 
 - Make the requirement analyst own a seed pool through its prompt and file
