@@ -71,6 +71,8 @@ test('client registers the right-sidebar tab and opens it from the conversation 
   assert.ok(SOURCE.includes('/plugins/dsh-agent-team-workflow/api'));
   assert.ok(SOURCE.includes('/state?session='));
   assert.ok(SOURCE.includes('/board?session='));
+  assert.ok(SOURCE.includes('team-workflow-board'));
+  assert.ok(SOURCE.includes('看板'));
   assert.ok(SOURCE.includes('sessionId'));
 });
 
@@ -110,6 +112,9 @@ test('apply registers the tab, the pane body and the header entry', () => {
   assert.equal(header.definition.id, 'team-workflow-open');
   header.definition.inject().open();
   assert.equal(captured.opened, 'team-workflow');
+  const board = captured.slots.find(slot => slot.definition.id === 'team-workflow-board');
+  assert.ok(board);
+  assert.equal(board.definition.name, 'conversation.session.header.actions');
 });
 
 test('buildGraph layers a v2 branch, labels outcomes and routes a loop', () => {

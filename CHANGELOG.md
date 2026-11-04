@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.1
+
+- Replace the side-panel `↗` `window.open` action with a real anchor link so it
+  is not blocked as a popup.
+- Add a `看板` action beside `工作流` in the conversation header; it opens the
+  standalone board URL in a new page.
+
 ## 1.7.0
 
 - Polish the standalone board: a full-height graph fitted to the available
