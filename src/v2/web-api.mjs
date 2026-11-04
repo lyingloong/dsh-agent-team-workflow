@@ -1,9 +1,9 @@
 /**
- * v2 Web API for the node/run panel.
+ * v2 Web API for the node/run board.
  *
  * Routes are session-scoped and use the same JSON store as the tools. The run
  * route executes nodes with the last Agent object observed for that session, so
- * a panel button can continue a run after a human decision.
+ * a board button can continue a run after a human decision.
  */
 
 import path from 'node:path';
@@ -194,7 +194,7 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     } catch (error) {
       state.status = 'failed';
       state.lastError = error.message;
-      logger.warn?.(`dsh-agent-team-workflow: panel run failed: ${error.message}`);
+      logger.warn?.(`dsh-agent-team-workflow: board run failed: ${error.message}`);
     }
     await store.saveRun(state);
     sendJson(res, 200, panelState(stored, state));

@@ -10,5 +10,5 @@
       config:
         # Subagent provider used by agent nodes.
         subagentProvider: spawn
-        # Maximum node executions per team_workflow_run / panel continue call.
+        # Maximum node executions per team_workflow_run / board continue call.
         maxSteps: 40
