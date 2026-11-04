@@ -38,6 +38,7 @@ export function publicRun(state) {
       attempt: token.attempt,
       outcome: token.outcome,
       output: token.output,
+      model: token.model ?? null,
       error: token.error,
       branch: token.branch,
       joinTokenId: token.joinTokenId,

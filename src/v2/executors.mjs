@@ -22,33 +22,45 @@ export function createExecutors({ ctx, exec, settings, cwd }) {
         throw new Error('no subagent service is mounted');
       }
       const lane = definition.providers.find(provider => provider.id === node.config.lane) ?? null;
-      const agentOptions = {};
-      const provider = node.config.provider ?? lane?.adapter;
-      const model = node.config.model ?? lane?.model;
-      if (provider) agentOptions.provider = provider;
-      if (model && model !== 'host-default') agentOptions.model = model;
-      if (lane?.reasoningEffort) agentOptions.reasoningEffort = lane.reasoningEffort;
-      if (lane?.maxTokens) agentOptions.maxTokens = lane.maxTokens;
       const agentCwd = node.config.cwd ? path.resolve(cwd, node.config.cwd) : cwd;
       const outcomes = Array.isArray(node.config.outcomes) && node.config.outcomes.length > 0
         ? node.config.outcomes
         : node.config.outcome ? [node.config.outcome] : ['complete'];
       const prompt = agentPrompt({ definition, node, input, context, outcomes });
-      const activation = await subagents.startActivation({
-        provider: settings.subagentProvider,
-        label: `workflow:${node.id}`,
-        request: {
-          prompt: [{ type: 'text', text: prompt }],
-          parent: exec.agent,
-          cwd: agentCwd,
-          ...(Object.keys(agentOptions).length > 0 ? { agentOptions } : {}),
-        },
-        signal: exec.signal,
-        delivery: 'caller',
-      });
-      const result = await activation.result;
-      if (result?.stopReason !== 'completed') throw new Error(result?.diagnostic ?? `subagent stopped: ${result?.stopReason ?? 'unknown'}`);
-      return parseAgentText(textOf(result?.output), { outcomes, fallback: outcomes[0] });
+      const candidates = modelCandidates(node, lane);
+      const failures = [];
+      for (const candidate of candidates) {
+        let activation;
+        try {
+          const options = agentOptionsFor(candidate, lane);
+          activation = await subagents.startActivation({
+            provider: settings.subagentProvider,
+            label: `workflow:${node.id}`,
+            request: {
+              prompt: [{ type: 'text', text: prompt }],
+              parent: exec.agent,
+              cwd: agentCwd,
+              ...(options ? { agentOptions: options } : {}),
+            },
+            signal: exec.signal,
+            delivery: 'caller',
+          });
+          const result = await activation.result;
+          if (result?.stopReason !== 'completed') throw new Error(result?.diagnostic ?? `subagent stopped: ${result?.stopReason ?? 'unknown'}`);
+          const parsed = parseAgentText(textOf(result?.output), { outcomes, fallback: outcomes[0] });
+          return { ...parsed, model: { provider: candidate.provider ?? null, model: candidate.model ?? null } };
+        } catch (error) {
+          failures.push(`${candidateLabel(candidate)}: ${error?.message ?? String(error)}`);
+          if (activation && typeof activation.dispose === 'function') {
+            try {
+              await activation.dispose();
+            } catch {
+              // The failed child is already unusable; continue to the next model.
+            }
+          }
+        }
+      }
+      throw new Error(`all model candidates failed: ${failures.join('; ')}`);
     },
     async command({ node }) {
       try {
@@ -89,8 +101,33 @@ export function createExecutors({ ctx, exec, settings, cwd }) {
   };
 }
 
-export function agentPrompt({ definition, node, input, context, outcomes }) {
-  return [
+function modelCandidates(node, lane) {
+  if (Array.isArray(node.config.models) && node.config.models.length > 0) {
+    return node.config.models.map(entry => ({ provider: entry.provider ?? null, model: entry.model ?? null }));
+  }
+  const provider = node.config.provider ?? lane?.adapter ?? null;
+  const model = node.config.model ?? lane?.model ?? null;
+  if (provider !== null || model !== null) return [{ provider, model }];
+  return [{ provider: null, model: null }];
+}
+
+function agentOptionsFor(candidate, lane) {
+  const options = {};
+  const provider = candidate.provider ?? lane?.adapter;
+  const model = candidate.model ?? lane?.model;
+  if (provider) options.provider = provider;
+  if (model && model !== 'host-default') options.model = model;
+  if (lane?.reasoningEffort) options.reasoningEffort = lane.reasoningEffort;
+  if (lane?.maxTokens) options.maxTokens = lane.maxTokens;
+  return Object.keys(options).length > 0 ? options : null;
+}
+
+function candidateLabel(candidate) {
+  if (!candidate.provider && !candidate.model) return 'host-default';
+  return `${candidate.provider ?? 'host-default'}/${candidate.model ?? 'host-default'}`;
+}
+
+export function agentPrompt({ definition, node, input, context, outcomes }) {  return [
     `You are executing node "${node.id}" of workflow "${definition.name}".`,
     node.role ? `Role: ${node.role}` : '',
     node.config.prompt ? `Instructions:\n${node.config.prompt}` : '',

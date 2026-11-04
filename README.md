@@ -132,7 +132,7 @@ a restricted workflow (agent/human/fanout/join only) or use an allowlist.
 
 | Type | Config | Behavior |
 | --- | --- | --- |
-| `agent` | `role?`, `prompt?`, `lane?`, `provider?`, `model?`, `cwd?`, `outcomes?`, `outcome?` | Spawns a DSH subagent. The child returns JSON `{outcome, output}`; plain text becomes `{text}`. |
+| `agent` | `role?`, `prompt?`, `lane?`, `provider?`, `model?`, `models?`, `cwd?`, `outcomes?`, `outcome?` | Spawns a DSH subagent. The child returns JSON `{outcome, output}`; plain text becomes `{text}`. |
 | `command` | `command`, `cwd?`, `timeoutMs?` | Runs a shell command in the session cwd. Exit 0 → `complete`; non-zero → `fail`. |
 | `http` | `url`, `method?`, `headers?`, `body?`, `timeoutMs?` | `fetch`; 2xx → `complete`, otherwise `fail`. |
 | `human` | `title?`, `outcomes?` | Waits for `team_workflow_decide` or the panel. Default outcomes: `approve`, `reject`. |
@@ -145,6 +145,19 @@ Agent nodes use the lane's `adapter/model/reasoningEffort/maxTokens` as subagent
 `provider`/`model` on the node overrides the lane and is what the panel writes
 when you pick a model. `cwd` is forwarded to the subagent as its starting
 directory; relative paths resolve against the session working directory.
+
+An agent node can instead carry an ordered `models` fallback list:
+
+```json
+"models": [
+  { "provider": "provider-a", "model": "model-1" },
+  { "provider": "provider-b", "model": "model-2" }
+]
+```
+
+The executor tries them in order on a subagent/provider error; a task `fail`
+outcome is not a provider error and is returned as the node outcome. The panel
+edits this list with add/remove/reorder controls.
 
 A command exits 0 for `complete` and non-zero for `fail`. A `fail` outcome must
 have an outgoing `on: "fail"` edge; otherwise the run itself fails with
@@ -210,10 +223,12 @@ The right-sidebar **工作流** tab is graph-first:
 
 - a compact header with workflow name, run status, node/edge count and
   permission state;
-- the node graph, with node type, role, execution count and agent model;
+- the node graph, which scales to the available pane size, with node type,
+  role, execution count and agent model;
 - waiting human decisions with outcome buttons;
 - clicking a node opens a sheet with its latest token, output, errors and raw
-  config; agent nodes include the host model picker;
+  config; agent nodes include an ordered model fallback list with add/remove/
+  reorder controls;
 - **运行详情** opens the token log and run context; **新运行** opens the input
   composer; **继续运行** advances a waiting/running run.
 
