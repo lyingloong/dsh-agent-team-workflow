@@ -241,9 +241,8 @@ The right-sidebar **工作流** tab is graph-first:
 
 - a compact header with workflow name, run status, node/edge count and
   permission state;
-- the node graph, which scales to the available pane size; each node type has
-  its own glyph, tint, border and type label; orthogonal edges route around
-  nodes, labels sit beside lines, and long titles wrap to two lines;
+- a Cytoscape.js node graph with a dagre layered layout, pan/zoom/fit
+  controls, taxi edge routing, type-specific shapes/colors and wrapped labels;
 - waiting human decisions with outcome buttons;
 - clicking a node opens a sheet with its latest token, output, errors and raw
   config; agent nodes include an ordered model fallback list with add/remove/
@@ -273,12 +272,15 @@ panel).
 ## Development
 
 ```bash
+npm install
+npm run build:client             # Rollup: src/client -> lib/client.js
 npm test                         # v2 tests in one process
 node --test "tests/*.test.mjs"   # standard runner
 ```
 
-Coverage: definition/runtime/store, DSH tools, panel web API and client bundle.
-No v1 tests or code remain; see [AGENTS.md](AGENTS.md).
+The package ships the built `lib/client.js`; rebuilding is only needed after
+changing `src/client`. Coverage: definition/runtime/store, DSH tools, panel web
+API and client bundle. No v1 tests or code remain; see [AGENTS.md](AGENTS.md).
 
 ## Security
 

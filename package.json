@@ -1,6 +1,6 @@
 {
   "name": "dsh-agent-team-workflow",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": false,
   "description": "DSH plugin for user-defined node-graph workflows: agent, command, HTTP, human, fan-out/join and subworkflow nodes with permissions, artifacts and a live run panel.",
   "type": "module",
@@ -24,6 +24,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "build:client": "node scripts/build-client.mjs",
     "test": "node tests/run.mjs",
     "test:runner": "node --test \"tests/*.test.mjs\"",
     "test:watch": "node --test --watch tests/"
@@ -61,5 +62,12 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^29.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "cytoscape": "^3.34.4",
+    "cytoscape-dagre": "^4.0.1",
+    "rollup": "^4.67.4"
   }
 }
