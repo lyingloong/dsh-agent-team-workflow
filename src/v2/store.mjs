@@ -13,6 +13,7 @@ export class SessionStore {
   constructor(dataDir) {
     this.dataDir = path.resolve(dataDir);
     this.definitionPath = path.join(this.dataDir, 'workflow.json');
+    this.controlPath = path.join(this.dataDir, 'control.json');
     this.runsDir = path.join(this.dataDir, 'runs');
   }
 
@@ -31,6 +32,24 @@ export class SessionStore {
       if (error.code === 'ENOENT') return null;
       throw error;
     }
+  }
+
+  async loadControl() {
+    try {
+      const text = await readFile(this.controlPath, 'utf8');
+      const value = JSON.parse(text);
+      return { continuous: value?.continuous !== false, updatedAt: value?.updatedAt ?? null };
+    } catch (error) {
+      if (error.code === 'ENOENT') return { continuous: true, updatedAt: null };
+      throw error;
+    }
+  }
+
+  async saveControl(control = {}) {
+    const document = { continuous: control.continuous !== false, updatedAt: new Date().toISOString() };
+    await mkdir(this.dataDir, { recursive: true });
+    await atomicJson(this.controlPath, document);
+    return document;
   }
 
   async saveRun(run) {

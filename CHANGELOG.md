@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.7.0
+
+- Add a `gate` node and persistent continuous-run control. When off, the gate
+  waits and the requirement queue keeps accumulating; when on, the next queued
+  item starts.
+- Add the continuous auto-dev loop: gate → intake → analyst/risk/approval →
+  implementation → review → PR → human/AI review → merge → complete → gate.
+- Add a board continuous switch and requirement-queue card; pending human work
+  stays in the Human 待办 card.
+- Restore agent model selection in the node-detail card using the host model
+  catalog and node-model API.
+- Expose control, queue and model routes on the token-protected board API.
+
 ## 2.6.0
 
 - Add a dedicated Human 待办 card with waiting count, notes, outcome buttons

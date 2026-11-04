@@ -138,6 +138,7 @@ a restricted workflow (agent/human/fanout/join only) or use an allowlist.
 | `human` | `title?`, `outcomes?` | Waits for `team_workflow_decide` or the web board. Default outcomes: `approve`, `reject`. |
 | `fanout` | `items`, `target`, `join` | Resolves `items` to an array and creates one branch token at `target`; each branch receives `$item` and `$index`. |
 | `join` | `mode: all\|any\|quorum`, `count?` | Aggregates branch outputs; `all` waits for every branch. |
+| `gate` | none | Continuous-run switch. Passes when the session control is enabled; otherwise waits for the queue to accumulate. |
 | `subworkflow` | `definition` | Runs an inline nested definition and exposes its context as the node output. |
 
 Agent nodes use the lane's `adapter/model/reasoningEffort/maxTokens` as subagent
@@ -221,23 +222,36 @@ subworkflow node completes.
 ## Auto-dev reference
 
 [examples/auto-dev-full.json](examples/auto-dev-full.json) is the complete
-two-source development flow:
+continuous two-source development loop:
 
 ```text
-Intake requirement
-  ├─ user  ─────────────────────────────→ Record requirement
-  └─ mined → Requirement analyst → risk
-       ├─ low  ────────────────────────→ Record requirement
-       └─ mid/high → Approve mined requirement (human)
-             ├─ approve ───────────────→ Record requirement
-             └─ reject → Requirement analyst (rework with note)
+Continuous switch (gate)
+  → Intake requirement
+      ├─ user  ─────────────────────────→ Record requirement
+      └─ mined → Requirement analyst → risk
+           ├─ low  ────────────────────→ Record requirement
+           └─ mid/high → Approve mined requirement (human)
+                 ├─ approve ───────────→ Record requirement
+                 └─ reject → Requirement analyst (note)
 Record requirement
-  → Plan implementation → branch → Implement → npm test → Review
+  → Plan → branch → Implement → npm test → Review
       ├─ needs_revision / test fail → Implement
       └─ pass → Open PR → Human review pool (human/AI)
-            ├─ approve → Merge PR
+            ├─ approve → Merge → Complete requirement → Continuous switch
             └─ reject → Implement (with note)
 ```
+
+The gate owns the continuous switch. When it is off, a token waits at the gate
+and the loop stops; new user requirements and mined seeds can still be appended
+to the repository queue. When it is on, `team_workflow_run` wakes the gate and
+the next queued requirement runs. The engine is serial, so processing is one
+requirement at a time.
+
+`requirements/requirements.json` is the queue and requirement registry. Entries
+with `status: queued` are pending; the intake agent prefers `source=user`,
+`priority=0`, then queue order. A completed item is marked `status: done` by the
+Complete requirement node. The requirement analyst writes the mined seed pool to
+`requirements/seeds.json`.
 
 Requirement rules:
 
@@ -260,6 +274,11 @@ PR. The PR then waits in the `Human review pool` node. A human or an external AI
 with access to `team_workflow_decide` can approve/reject; the board also offers a
 note field, and the note is passed to implementation. GitHub PR comments remain
 the place for threaded PR feedback.
+
+The switch can be toggled on the board. Turning it on immediately calls the run
+endpoint to wake a paused gate; turning it off lets the current item finish and
+then waits at the gate. The board also shows the queued requirements and ready
+seed count.
 
 It requires a command grant for `git`, `npm` and `gh` (the workflow is defined
 with that allowlist), a configured `gh` login, and a session whose cwd is the
@@ -291,8 +310,11 @@ The board is graph-first:
   edges do not cut through cards; outcome labels sit beside their lines;
 - clicking a node opens its detail card **below the graph**, with latest output,
   token input, run context, node config, errors, token history, attempt/model
-  metadata and clickable upstream/downstream links;
-- the **运行** card shows progress and the continue action;
+  metadata and clickable upstream/downstream links; agent nodes include a model
+  picker backed by the host model catalog and the node-model API;
+- the **运行** card shows progress, the continue action and the continuous-run
+  switch; turning it on wakes a paused gate, turning it off waits at the gate;
+- a **需求队列** card shows queued user requirements and ready seed count;
 - a separate **Human 待办** card lists every waiting human token with a count,
   outcome buttons, a freeform note field and recent human decisions. Notes are
   sent as the decision output and flow to the analyst or implementation node;

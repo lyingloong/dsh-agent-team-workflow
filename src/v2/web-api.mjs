@@ -8,6 +8,7 @@
 
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { normalizeDefinition } from './definition.mjs';
@@ -71,6 +72,34 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     return store.latestRun();
   };
 
+  const readQueue = async session => {
+    const exec = agents.get(session);
+    const cwd = exec?.agent?.session?.header?.cwd;
+    if (typeof cwd !== 'string' || cwd === '') return null;
+    const base = path.join(cwd, 'requirements');
+    const read = async name => {
+      try { return JSON.parse(await readFile(path.join(base, name), 'utf8')); } catch { return null; }
+    };
+    const requirements = await read('requirements.json');
+    const seeds = await read('seeds.json');
+    const list = Array.isArray(requirements) ? requirements : [];
+    const seedList = Array.isArray(seeds) ? seeds : [];
+    const queued = list.filter(item => item?.status === 'queued');
+    return {
+      path: base,
+      total: list.length,
+      queued: queued.length,
+      items: queued.slice(0, 8).map(item => ({
+        id: item.id ?? '',
+        title: item.title ?? item.id ?? '',
+        source: item.source ?? '',
+        priority: item.priority ?? null,
+        tags: Array.isArray(item.tags) ? item.tags : [],
+      })),
+      seedsReady: seedList.filter(item => item?.status === 'ready').length,
+    };
+  };
+
   route('/board', async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://local');
     storeFor(url.searchParams.get('session'));
@@ -88,7 +117,16 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     const store = storeFor(session);
     const stored = await store.loadDefinition();
     const state = await loadState(store, url.searchParams.get('runId'));
-    sendJson(res, 200, panelState(stored, state));
+    sendJson(res, 200, { ...panelState(stored, state), control: await store.loadControl(), queue: await readQueue(session) });
+  });
+
+  route('/api/control', async (req, res) => {
+    const url = new URL(req.url ?? '/', 'http://local');
+    const store = storeFor(url.searchParams.get('session'));
+    if (req.method === 'GET') return sendJson(res, 200, { control: await store.loadControl() });
+    const body = await readJson(req);
+    const control = await store.saveControl({ continuous: body.continuous !== false });
+    sendJson(res, 200, { control });
   });
 
   route('/api/models', async (req, res) => {
@@ -105,6 +143,55 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
   });
 
   route('/api/node-model', async (req, res) => {
+    const body = await readJson(req);
+    const store = storeFor(body.session);
+    const stored = await store.loadDefinition();
+    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
+    const nodeId = requireText(body.nodeId, 'nodeId');
+    const node = stored.definition.nodes.find(candidate => candidate.id === nodeId);
+    if (!node) return sendJson(res, 404, { error: { code: 'no_node', message: `unknown node ${nodeId}` } });
+    if (node.type !== 'agent') {
+      return sendJson(res, 400, { error: { code: 'not_model_node', message: `node ${nodeId} does not use a model` } });
+    }
+    const provider = optionalText(body.provider);
+    const model = optionalText(body.model);
+    const models = readModels(body.models);
+    if (models === null && (provider === null) !== (model === null)) {
+      return sendJson(res, 400, { error: { code: 'invalid_model', message: 'provider and model must be set or cleared together' } });
+    }
+    let definition;
+    try {
+      definition = normalizeDefinition({
+        ...stored.definition,
+        nodes: stored.definition.nodes.map(candidate => {
+          if (candidate.id !== nodeId) return candidate;
+          return { ...candidate, config: updatedModelConfig(candidate.config, { models, provider, model }) };
+        }),
+      });
+    } catch (error) {
+      return sendJson(res, 400, { error: { code: error.code ?? 'invalid_definition', message: error.message } });
+    }
+    await store.saveDefinition({ definition, permissions: stored.permissions });
+    let state = await loadState(store, body.runId);
+    if (state) {
+      const target = state.definition.nodes.find(candidate => candidate.id === nodeId);
+      if (target) {
+        target.config = updatedModelConfig(target.config, { models, provider, model });
+        await store.saveRun(state);
+      }
+    }
+    sendJson(res, 200, { ...panelState({ definition, permissions: stored.permissions }, state), models: await readModelCatalog(ctx, definition) });
+  });
+
+  routePublic('/public/api/models', async (req, res) => {
+    const url = authorizePublic(req);
+    const store = storeFor(url.searchParams.get('session'));
+    const stored = await store.loadDefinition();
+    sendJson(res, 200, await readModelCatalog(ctx, stored?.definition));
+  });
+
+  routePublic('/public/api/node-model', async (req, res) => {
+    authorizePublic(req);
     const body = await readJson(req);
     const store = storeFor(body.session);
     const stored = await store.loadDefinition();
@@ -189,8 +276,9 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
       settings: { subagentProvider: settings.subagentProvider ?? 'spawn' },
       cwd: agentExec.agent?.session?.header?.cwd ?? process.cwd(),
     });
+    const control = await store.loadControl();
     try {
-      await run(state, executors, { maxSteps: settings.maxSteps ?? 40 });
+      await run(state, executors, { maxSteps: settings.maxSteps ?? 40, control });
     } catch (error) {
       state.status = 'failed';
       state.lastError = error.message;
@@ -220,7 +308,16 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     const store = storeFor(session);
     const stored = await store.loadDefinition();
     const state = await loadState(store, url.searchParams.get('runId'));
-    sendJson(res, 200, panelState(stored, state));
+    sendJson(res, 200, { ...panelState(stored, state), control: await store.loadControl(), queue: await readQueue(session) });
+  });
+
+  routePublic('/public/api/control', async (req, res) => {
+    const url = authorizePublic(req);
+    const store = storeFor(url.searchParams.get('session'));
+    if (req.method === 'GET') return sendJson(res, 200, { control: await store.loadControl() });
+    const body = await readJson(req);
+    const control = await store.saveControl({ continuous: body.continuous !== false });
+    sendJson(res, 200, { control });
   });
 
   routePublic('/public/api/start', async (req, res) => {
@@ -271,8 +368,9 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
       settings: { subagentProvider: settings.subagentProvider ?? 'spawn' },
       cwd: agentExec.agent?.session?.header?.cwd ?? process.cwd(),
     });
+    const control = await store.loadControl();
     try {
-      await run(state, executors, { maxSteps: settings.maxSteps ?? 40 });
+      await run(state, executors, { maxSteps: settings.maxSteps ?? 40, control });
     } catch (error) {
       state.status = 'failed';
       state.lastError = error.message;

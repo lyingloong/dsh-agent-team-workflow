@@ -1,9 +1,14 @@
 {
   "apiVersion": 2,
   "name": "auto-dev-full",
-  "description": "Two requirement sources with risk gates, implementation, review loop, PR, and a human/AI review pool. User requirements are highest priority and bypass requirement approval; mined requirements are risk-classified and mid/high risk need human approval.",
-  "entry": "intake",
+  "description": "Continuous two-source development loop. A gate switch pauses the loop; the requirement queue keeps accumulating while paused. User requirements are highest priority and bypass approval; mined requirements are risk-classified and mid/high risk need human approval. Each merged item returns to the queue.",
+  "entry": "gate",
   "nodes": [
+    {
+      "id": "gate",
+      "type": "gate",
+      "title": "Continuous switch"
+    },
     {
       "id": "intake",
       "type": "agent",
@@ -17,7 +22,7 @@
       },
       "config": {
         "outcomes": ["user", "mined"],
-        "prompt": "Classify where this requirement came from and normalize it. If Input.requirement has text or Input.source is user, treat it as a user requirement: source=user, priority=0, preserve the user's tags (add inferred tags only as extra), and do not ask for requirement approval. Otherwise it is mined: source=mined; do not invent the requirement yet, the Requirement analyst will propose it. Do not edit files. Return JSON {source, requirement:{title,body,tags,priority,acceptance}, rationale} and the matching outcome user|mined."
+        "prompt": "Choose the next requirement for this continuous loop. If Input.requirement has text or Input.source is user, use that user requirement: source=user, priority=0, preserve tags. Otherwise read requirements/requirements.json and choose the first entry with status queued, preferring source=user and priority 0; use that entry and set source to its source. If there is no queued entry, source=mined and leave the requirement to the Requirement analyst. Do not edit application code. Return JSON {source, requirement:{id,title,body,tags,priority,acceptance}, rationale} and outcome user|mined."
       }
     },
     {
@@ -31,7 +36,7 @@
         "feedback": "$nodes.requirement_review.output"
       },
       "config": {
-        "prompt": "You own the mined-requirement seed pool. Read poolPath from Input when present, otherwise requirements/seeds.json, docs/requirements*.json or REQUIREMENTS.md. The pool is JSON: [{id,title,status,priority,tags,acceptance,body}]. If feedback is present from a rejected human requirement review, revise the previously proposed mined requirement using that feedback. Choose exactly one seed with status ready, highest priority first; if no pool exists, propose one small repository improvement from the current tree. Do not edit application code. You may only update the selected seed's status to claimed and record the run id; never edit other seeds. Return JSON {seedId,poolPath,title,body,tags,acceptance,riskHints,plan}. If nothing is ready, return {blocked:true,reason}."
+        "prompt": "You own the mined-requirement seed pool for a continuous loop. Read poolPath from Input when present, otherwise requirements/seeds.json, docs/requirements*.json or REQUIREMENTS.md. The pool is JSON: [{id,title,status,priority,tags,acceptance,body}]. If feedback is present from a rejected human requirement review, revise the previously proposed mined requirement using that feedback. Choose exactly one seed with status ready, highest priority first; if no pool exists or no ready seed remains, mine exactly one small repository improvement from the current tree. Do not edit application code. You may only update the selected seed's status to claimed and record the run id; never edit other seeds. Return JSON {seedId,poolPath,title,body,tags,acceptance,riskHints,plan}. If nothing can be mined, return {blocked:true,reason}."
       }
     },
     {
@@ -64,7 +69,7 @@
         "addToSeedPool": "$input.addToSeedPool"
       },
       "config": {
-        "prompt": "Record the selected requirement in requirements/requirements.json (create the file if missing). The list schema is [{id,title,body,tags,source,priority,risk,status,createdAt,runId}]. If Intake.source is user, use Intake.requirement, priority 0, risk=user, status=approved: user requirements need no requirement approval. Otherwise use the Requirement analyst output, risk from the risk assessment, status=approved after the gate. If Input.addToSeedPool is true and this is a user requirement, you may append related seed entries to requirements/seeds.json, but keep the requirements list authoritative. Do not edit application code. Return the normalized requirement record as JSON."
+        "prompt": "Record the selected requirement in requirements/requirements.json (create if missing). The list schema is [{id,title,body,tags,source,priority,risk,status,createdAt,runId}]. If Intake.source is user, use Intake.requirement, priority 0, risk=user, status=in_progress; user requirements need no requirement approval. Otherwise use the Requirement analyst output, risk from the risk assessment, status=in_progress after the gate. If this is a user requirement and Input.addToSeedPool is true, you may append related seed entries to requirements/seeds.json. Do not edit application code. Return the normalized requirement record as JSON."
       }
     },
     {
@@ -146,9 +151,23 @@
         "command": "gh pr merge auto/auto-dev --merge",
         "timeoutMs": 300000
       }
+    },
+    {
+      "id": "complete",
+      "type": "agent",
+      "title": "Complete requirement",
+      "role": "analyst",
+      "inputs": {
+        "requirement": "$nodes.register.output",
+        "pr_review": "$nodes.pr_review.output"
+      },
+      "config": {
+        "prompt": "Mark this requirement complete in requirements/requirements.json: find the matching id and set status=done, completedAt, and the PR URL if available. If the requirement came from a seed, mark that seed done in requirements/seeds.json. Do not edit application code or other requirements. Return JSON {requirementId,status}."
+      }
     }
   ],
   "edges": [
+    { "from": "gate", "to": "intake", "on": "complete" },
     { "from": "intake", "to": "register", "on": "user" },
     { "from": "intake", "to": "analyst", "on": "mined" },
     { "from": "analyst", "to": "risk", "on": "complete" },
@@ -167,6 +186,8 @@
     { "from": "review", "to": "implement", "on": "needs_revision" },
     { "from": "pr", "to": "pr_review", "on": "complete" },
     { "from": "pr_review", "to": "merge", "on": "approve" },
-    { "from": "pr_review", "to": "implement", "on": "reject" }
+    { "from": "pr_review", "to": "implement", "on": "reject" },
+    { "from": "merge", "to": "complete", "on": "complete" },
+    { "from": "complete", "to": "gate", "on": "complete" }
   ]
 }

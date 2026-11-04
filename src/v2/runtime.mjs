@@ -61,14 +61,25 @@ export function newRunState({ definition, permissions, input = {}, now = new Dat
   return state;
 }
 
-/** Process ready tokens until the run waits for a human/join or a step budget is hit. */
-export async function run(state, executors, { maxSteps = 50, now = () => new Date().toISOString() } = {}) {
+/** Process ready tokens until the run waits for a human/join/gate or a step budget is hit. */
+export async function run(state, executors, { maxSteps = 50, now = () => new Date().toISOString(), control = null } = {}) {
   let steps = 0;
+  if (control?.continuous !== false) {
+    for (const token of state.tokens) {
+      if (token.status !== 'waiting') continue;
+      const node = state.definition.nodes.find(candidate => candidate.id === token.nodeId);
+      if (node?.type === 'gate' && token.reason === 'gate_paused') {
+        token.status = 'ready';
+        token.reason = null;
+        token.updatedAt = now();
+      }
+    }
+  }
   while (steps < maxSteps) {
     const token = state.tokens.find(candidate => candidate.status === 'ready');
     if (!token) break;
     steps += 1;
-    await executeToken(state, token, executors, now);
+    await executeToken(state, token, executors, now, control);
     refreshStatus(state);
     state.updatedAt = now();
     if (state.status === 'failed') break;
@@ -118,7 +129,7 @@ export function waitingHumanTokens(state) {
   return waitingTokens(state).filter(token => humanNodes.has(token.nodeId));
 }
 
-async function executeToken(state, token, executors, now) {
+async function executeToken(state, token, executors, now, control = null) {
   const node = state.definition.nodes.find(candidate => candidate.id === token.nodeId);
   if (!node) throw new RuntimeError('unknown_node', `token ${token.id} references unknown node ${token.nodeId}`);
   token.status = 'running';
@@ -128,6 +139,17 @@ async function executeToken(state, token, executors, now) {
     if (node.type === 'human') {
       token.status = 'waiting';
       token.updatedAt = now();
+      return;
+    }
+    if (node.type === 'gate') {
+      if (control?.continuous === false) {
+        token.status = 'waiting';
+        token.reason = 'gate_paused';
+        token.updatedAt = now();
+        return;
+      }
+      completeToken(state, token, { outcome: 'complete', output: null });
+      followEdges(state, token, 'complete', now);
       return;
     }
     if (node.type === 'fanout') {
@@ -144,7 +166,7 @@ async function executeToken(state, token, executors, now) {
       const childDefinition = node.config.definition;
       const childInput = resolveInputs(node, state, token);
       const child = newRunState({ definition: childDefinition, permissions: state.permissions, input: childInput, now: now() });
-      await run(child, executors, { maxSteps: 100, now });
+      await run(child, executors, { maxSteps: 100, now, control });
       if (child.status !== 'done') {
         throw new RuntimeError('subworkflow_not_done', `subworkflow ${node.id} ended as ${child.status}`);
       }

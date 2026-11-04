@@ -134,6 +134,7 @@ test('v2 web API supports state, start, decide and run', async (t) => {
   const { routes, store } = setup(t);
   assert.deepEqual([...routes.keys()].sort(), [
     '/plugins/dsh-agent-team-workflow/api/board-url',
+    '/plugins/dsh-agent-team-workflow/api/control',
     '/plugins/dsh-agent-team-workflow/api/decide',
     '/plugins/dsh-agent-team-workflow/api/models',
     '/plugins/dsh-agent-team-workflow/api/node-model',
@@ -318,4 +319,27 @@ test('public board URL is token-scoped and served by the loopback board server',
   });
   assert.equal(state.status, 200);
   assert.equal(state.json.defined, true);
+});
+
+test('control route pauses and resumes the continuous switch', async (t) => {
+  const { routes } = setup(t);
+  const initial = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/control'), {
+    url: `/plugins/dsh-agent-team-workflow/api/control?session=${SESSION}`,
+  });
+  assert.equal(initial.status, 200);
+  assert.equal(initial.json.control.continuous, true);
+
+  const paused = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/control'), {
+    method: 'POST',
+    url: `/plugins/dsh-agent-team-workflow/api/control?session=${SESSION}`,
+    body: { session: SESSION, continuous: false },
+  });
+  assert.equal(paused.status, 200);
+  assert.equal(paused.json.control.continuous, false);
+
+  const state = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/state'), {
+    url: `/plugins/dsh-agent-team-workflow/api/state?session=${SESSION}`,
+  });
+  assert.equal(state.status, 200);
+  assert.equal(state.json.control.continuous, false);
 });

@@ -100,6 +100,16 @@ button { cursor: pointer; }
 .run-summary { padding: 10px 12px 0; display: grid; gap: 4px; font-size: 11px; color: var(--muted); }
 .run-summary strong { color: var(--text); font-weight: 600; }
 .run-actions { padding: 10px 12px; display: flex; gap: 7px; flex-wrap: wrap; }
+.control-row { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; cursor: pointer; }
+.control-row input { accent-color: var(--brand); }
+.control-hint { margin-left: auto; color: var(--muted); font-size: 10px; }
+.queue-card { min-width: 0; }
+.queue-list { display: flex; flex-direction: column; }
+.queue-item { padding: 8px 12px; border-top: 1px solid var(--line); font-size: 11px; }
+.queue-item:first-child { border-top: 0; }
+.queue-item-title { color: var(--text); font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-item-meta { color: var(--muted); font-size: 10px; margin-top: 2px; display: flex; gap: 5px; flex-wrap: wrap; }
+.queue-empty { padding: 12px; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .human-card { min-width: 0; }
 .human-todo { display: flex; flex-direction: column; }
 .human-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--panel)); font-size: 10px; }
@@ -144,6 +154,19 @@ button { cursor: pointer; }
 .detail-token .run-outcome { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .detail-token .run-time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .detail-token.active { background: color-mix(in srgb, var(--brand) 6%, transparent); }
+.model-list { display: flex; flex-direction: column; }
+.model-row { display: flex; align-items: center; gap: 6px; padding: 6px 9px; border-top: 1px solid var(--line); font-size: 10.5px; }
+.model-row:first-child { border-top: 0; }
+.model-index { width: 16px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.model-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-actions { display: flex; gap: 2px; }
+.model-actions button { width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); font-size: 10px; line-height: 1; }
+.model-actions button:hover { color: var(--text); border-color: var(--line-strong); }
+.model-add { display: flex; gap: 5px; flex-wrap: wrap; padding: 8px 9px; border-top: 1px solid var(--line); background: var(--panel-2); }
+.model-add select { min-width: 0; height: 26px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--text); font-size: 10.5px; padding: 0 5px; }
+.model-add .btn { padding: 3px 8px; font-size: 10.5px; }
+.model-help { padding: 7px 9px; color: var(--muted); font-size: 10px; line-height: 1.5; border-top: 1px solid var(--line); }
+.model-empty { padding: 9px; color: var(--muted); font-size: 10.5px; }
 .empty { padding: 44px 18px; text-align: center; color: var(--muted); }
 .empty strong { display: block; margin-bottom: 5px; color: var(--text); font-size: 13px; }
 .toast { position: fixed; right: 18px; bottom: 18px; z-index: 30; max-width: 440px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); font-size: 11.5px; }
@@ -208,6 +231,12 @@ button { cursor: pointer; }
         <div class="run-actions">
           <button class="btn primary" id="runBtn" type="button">继续运行</button>
         </div>
+        <label class="control-row"><span>连续运行</span><input type="checkbox" id="continuousToggle"><span class="control-hint" id="controlHint"></span></label>
+      </section>
+
+      <section class="card queue-card">
+        <div class="card-head"><strong>需求队列</strong><span class="hint" id="queueHint"></span></div>
+        <div class="queue-list" id="queueList"></div>
       </section>
 
       <section class="card human-card">
@@ -240,7 +269,7 @@ button { cursor: pointer; }
   const BOARD_TOKEN = new URLSearchParams(location.search).get("token") || "";
   const STATUS = { running: "运行中", waiting: "等待决策", done: "已完成", failed: "失败" };
   const TOKEN = { ready: "就绪", running: "执行中", waiting: "等待", completed: "已完成", failed: "失败" };
-  const TYPE = { agent: "模型", command: "命令", http: "HTTP", human: "人工", fanout: "扇出", join: "聚合", subworkflow: "子流程" };
+  const TYPE = { agent: "模型", command: "命令", http: "HTTP", human: "人工", fanout: "扇出", join: "聚合", gate: "开关", subworkflow: "子流程" };
   const STYLE = {
     agent: { color: "#4f7cff", glyph: "✦" },
     command: { color: "#b06b12", glyph: ">_" },
@@ -248,6 +277,7 @@ button { cursor: pointer; }
     human: { color: "#8b5cf6", glyph: "☑" },
     fanout: { color: "#64748b", glyph: "Y" },
     join: { color: "#0f766e", glyph: "⋈" },
+    gate: { color: "#7c3aed", glyph: "⏻" },
     subworkflow: { color: "#2f8a55", glyph: "▣" }
   };
 
@@ -337,6 +367,7 @@ button { cursor: pointer; }
     if (node.type === "fanout") return node.config?.items || "";
     if (node.type === "join") return node.config?.mode || "all";
     if (node.type === "subworkflow") return "内联子流程";
+    if (node.type === "gate") return "连续运行开关";
     return modelText(node);
   }
   function toast(text, bad) {
@@ -360,10 +391,21 @@ button { cursor: pointer; }
     if (!response.ok) throw new Error(value?.error?.message || ("HTTP " + response.status));
     return value;
   }
+  function applyState(next) {
+    const control = state?.control;
+    const queue = state?.queue;
+    const models = state?.models;
+    state = next;
+    if (state.control === undefined) state.control = control;
+    if (state.queue === undefined) state.queue = queue;
+    if (state.models === undefined) state.models = models;
+  }
+
   async function load() {
     if (!SESSION) return;
     try {
-      state = await getJson(API + "/state?session=" + encodeURIComponent(SESSION));
+      applyState(await getJson(API + "/state?session=" + encodeURIComponent(SESSION)));
+      try { state.models = await getJson(API + "/models?session=" + encodeURIComponent(SESSION)); } catch {}
       render();
     } catch (error) {
       $("graph").innerHTML = '<div class="empty"><strong>载入失败</strong>' + esc(error.message) + "</div>";
@@ -724,6 +766,49 @@ button { cursor: pointer; }
     $("humanTodo").innerHTML = (items || '<div class="human-empty">当前没有待人工处理的事项。<br>工作流停在 human 节点时会出现在这里。</div>') + historyHtml;
   }
 
+  function renderControl() {
+    const continuous = state.control?.continuous !== false;
+    const paused = Boolean(state.run?.tokens?.some(token => token.status === "waiting" && token.reason === "gate_paused"));
+    $("continuousToggle").checked = continuous;
+    $("controlHint").textContent = continuous ? (paused ? "已开启，点继续运行唤醒" : "开") : (paused ? "已暂停，队列继续累计" : "关");
+  }
+
+  function renderQueue() {
+    const queue = state.queue;
+    if (!queue) {
+      $("queueHint").textContent = "";
+      $("queueList").innerHTML = '<div class="queue-empty">无法读取需求队列；需要一次助手会话以确定仓库 cwd。</div>';
+      return;
+    }
+    $("queueHint").textContent = queue.queued + " 待处理 · " + queue.seedsReady + " 种子";
+    $("queueList").innerHTML = queue.items?.length
+      ? queue.items.map(item => '<div class="queue-item"><div class="queue-item-title">' + esc(item.title) + '</div><div class="queue-item-meta"><span>' + esc(item.source || "queue") + '</span><span>priority ' + esc(item.priority ?? "—") + '</span>' + (item.tags || []).map(tag => '<span>#' + esc(tag) + '</span>').join("") + '</div></div>').join("")
+      : '<div class="queue-empty">队列为空。<br>开关开启后，需求师会从种子池继续挖掘。</div>';
+  }
+
+  function modelProviders() {
+    return Array.isArray(state.models?.providers) ? state.models.providers : [];
+  }
+
+  function renderModelPicker(node) {
+    const providers = modelProviders();
+    if (!providers.length) {
+      return '<section class="detail-section"><div class="detail-section-head">模型</div><div class="model-empty">模型目录暂不可用。</div></section>';
+    }
+    const configured = Array.isArray(node.config?.models) && node.config.models.length
+      ? node.config.models[0]
+      : (node.config?.provider && node.config?.model ? { provider: node.config.provider, model: node.config.model } : null);
+    const provider = providers.find(item => item.id === configured?.provider) || providers[0];
+    const models = Array.isArray(provider.models) ? provider.models : [];
+    const providerOptions = providers.map(item => '<option value="' + esc(item.id) + '"' + (item.id === provider.id ? ' selected' : '') + '>' + esc(item.name || item.id) + '</option>').join('');
+    const modelOptions = models.length
+      ? models.map(item => '<option value="' + esc(item.id) + '"' + (item.id === configured?.model ? ' selected' : '') + '>' + esc(item.name || item.id) + '</option>').join('')
+      : '<option value="">无可用模型</option>';
+    return '<section class="detail-section"><div class="detail-section-head">模型<span class="spacer"></span>' + esc(configured ? configured.provider + ' / ' + configured.model : '继承 lane/宿主默认') + '</div>' +
+      '<div class="model-add"><select data-model-provider>' + providerOptions + '</select><select data-model-name>' + modelOptions + '</select><button class="btn" type="button" data-model-save>应用</button><button class="btn" type="button" data-model-clear>使用默认</button></div>' +
+      '<div class="model-help">选择模型会写入节点的单一 provider/model，并清除 fallback 列表；清空后继承 lane/宿主默认。</div></section>';
+  }
+
   function renderDetail() {
     const card = $("detailCard");
     if (!selected || !state.definition) { card.classList.add("hide"); return; }
@@ -774,6 +859,7 @@ button { cursor: pointer; }
         section("运行上下文", nodeContext) +
         (token?.error ? section("错误", token.error, "detail-error") : "") +
         section("节点配置", node.config ?? {}) +
+        (node.type === "agent" ? renderModelPicker(node) : "") +
       '</div>';
   }
 
@@ -803,6 +889,8 @@ button { cursor: pointer; }
     $("legend").innerHTML = Object.entries(TYPE).map(([type, label]) => '<span><i style="background:' + STYLE[type].color + '"></i>' + label + "</span>").join("");
     renderGraph();
     renderRun();
+    renderControl();
+    renderQueue();
     renderDetail();
   }
 
@@ -814,7 +902,7 @@ button { cursor: pointer; }
       busy = true;
       $("runBtn").disabled = true;
       try {
-        state = await postJson(API + "/run", { session: SESSION, runId: state.run.runId });
+        applyState(await postJson(API + "/run", { session: SESSION, runId: state.run.runId }));
         render();
       } catch (error) {
         toast(error.message, true);
@@ -825,13 +913,33 @@ button { cursor: pointer; }
     }
   }
 
+  async function saveNodeModel(provider, model) {
+    if (busy || !selected) return;
+    busy = true;
+    try {
+      const result = await postJson(API + "/node-model", { session: SESSION, nodeId: selected, provider, model });
+      applyState(result);
+      if (result.models) state.models = result.models;
+      render();
+      toast(provider ? "模型已更新" : "已恢复默认模型");
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      busy = false;
+    }
+  }
+
   async function decide(tokenId, outcome) {
     if (busy || !state) return;
     const field = [...document.querySelectorAll("[data-note]")].find(item => item.dataset.note === tokenId);
     const note = field?.value.trim() ?? "";
+    const continuous = state.control?.continuous !== false;
     busy = true;
     try {
-      state = await postJson(API + "/decide", { session: SESSION, runId: state.run?.runId, tokenId, outcome, output: note ? { note } : null });
+      applyState(await postJson(API + "/decide", { session: SESSION, runId: state.run?.runId, tokenId, outcome, output: note ? { note } : null }));
+      if (continuous && state.run?.runId) {
+        applyState(await postJson(API + "/run", { session: SESSION, runId: state.run.runId }));
+      }
       render();
       toast("已提交：" + outcome);
     } catch (error) {
@@ -841,8 +949,27 @@ button { cursor: pointer; }
     }
   }
 
+  async function setContinuous(value) {
+    if (busy || !state) return;
+    busy = true;
+    try {
+      const result = await postJson(API + "/control", { session: SESSION, continuous: value });
+      state.control = result.control;
+      if (value && state.run?.runId) {
+        applyState(await postJson(API + "/run", { session: SESSION, runId: state.run.runId }));
+      }
+      render();
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      busy = false;
+      renderControl();
+    }
+  }
+
   $("refresh").addEventListener("click", () => action("refresh"));
   $("runBtn").addEventListener("click", () => action("run"));
+  $("continuousToggle").addEventListener("change", event => setContinuous(event.target.checked));
   $("zoomOut").addEventListener("click", () => zoomAt(1 / 1.2));
   $("zoomIn").addEventListener("click", () => zoomAt(1.2));
   $("fitAll").addEventListener("click", () => fitView("all"));
@@ -852,7 +979,28 @@ button { cursor: pointer; }
     const button = event.target.closest("[data-token][data-outcome]");
     if (button) decide(button.dataset.token, button.dataset.outcome);
   });
+  $("detailBody").addEventListener("change", event => {
+    const select = event.target.closest("[data-model-provider]");
+    if (!select) return;
+    const provider = modelProviders().find(item => item.id === select.value);
+    const target = $("detailBody").querySelector("[data-model-name]");
+    if (!target) return;
+    const models = Array.isArray(provider?.models) ? provider.models : [];
+    target.innerHTML = models.length
+      ? models.map(item => '<option value="' + esc(item.id) + '">' + esc(item.name || item.id) + '</option>').join('')
+      : '<option value="">无可用模型</option>';
+  });
+
   $("detailBody").addEventListener("click", event => {
+    const save = event.target.closest("[data-model-save]");
+    if (save) {
+      const provider = $("detailBody").querySelector("[data-model-provider]")?.value || "";
+      const model = $("detailBody").querySelector("[data-model-name]")?.value || "";
+      if (provider && model) saveNodeModel(provider, model);
+      return;
+    }
+    const clear = event.target.closest("[data-model-clear]");
+    if (clear) { saveNodeModel(null, null); return; }
     const link = event.target.closest("[data-select-node]");
     if (!link) return;
     selected = link.dataset.selectNode;
