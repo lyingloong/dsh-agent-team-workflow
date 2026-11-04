@@ -53,6 +53,7 @@ function setup(t) {
     get(name) {
       if (name === 'webServer') {
         return {
+          getOrigin: () => 'http://127.0.0.1:1234',
           register(route) {
             routes.set(route.path, route.handler);
             return () => routes.delete(route.path);
@@ -82,10 +83,10 @@ function setup(t) {
     },
     on() {},
   };
-  installWebApi({ ctx, dataRoot, agents, settings: { subagentProvider: 'spawn', maxSteps: 10 }, logger: { warn() {} } });
+  const api = installWebApi({ ctx, dataRoot, agents, settings: { subagentProvider: 'spawn', maxSteps: 10 }, logger: { warn() {} } });
   const store = new SessionStore(path.join(dataRoot, 'sessions', SESSION));
   t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 }));
-  return { routes, store };
+  return { routes, store, api };
 }
 
 function response() {
@@ -131,6 +132,7 @@ async function invokeRaw(handler, { method = 'GET', url } = {}) {
 test('v2 web API supports state, start, decide and run', async (t) => {
   const { routes, store } = setup(t);
   assert.deepEqual([...routes.keys()].sort(), [
+    '/plugins/dsh-agent-team-workflow/api/board-url',
     '/plugins/dsh-agent-team-workflow/api/decide',
     '/plugins/dsh-agent-team-workflow/api/models',
     '/plugins/dsh-agent-team-workflow/api/node-model',
@@ -138,6 +140,11 @@ test('v2 web API supports state, start, decide and run', async (t) => {
     '/plugins/dsh-agent-team-workflow/api/start',
     '/plugins/dsh-agent-team-workflow/api/state',
     '/plugins/dsh-agent-team-workflow/board',
+    '/plugins/dsh-agent-team-workflow/public/api/decide',
+    '/plugins/dsh-agent-team-workflow/public/api/run',
+    '/plugins/dsh-agent-team-workflow/public/api/start',
+    '/plugins/dsh-agent-team-workflow/public/api/state',
+    '/plugins/dsh-agent-team-workflow/public/board',
   ]);
   await store.saveDefinition({ definition: FLOW, permissions: { command: { mode: 'full', allow: [] } } });
 
@@ -284,4 +291,29 @@ test('board URL serves the standalone HTML board', async (t) => {
   assert.match(board.headers['content-type'], /^text\/html/);
   assert.match(board.body, /工作流看板/);
   assert.match(board.body, /\/state\?session=/);
+});
+
+test('public board URL is token-scoped and served on the alternate localhost origin', async (t) => {
+  const { api, store } = setup(t);
+  const url = api.boardUrl(SESSION);
+  assert.match(url, /^http:\/\/localhost:1234\//);
+  assert.match(url, /token=/);
+  await store.saveDefinition({ definition: FLOW, permissions: { command: { mode: 'full', allow: [] } } });
+
+  const board = await invokeRaw(api.publicRoutes.get('/plugins/dsh-agent-team-workflow/public/board'), {
+    url: `/plugins/dsh-agent-team-workflow/public/board?session=${SESSION}&token=${encodeURIComponent(api.publicToken)}`,
+  });
+  assert.equal(board.status, 200);
+  assert.match(board.body, /工作流看板/);
+
+  const denied = await invokeRaw(api.publicRoutes.get('/plugins/dsh-agent-team-workflow/public/api/state'), {
+    url: `/plugins/dsh-agent-team-workflow/public/api/state?session=${SESSION}`,
+  });
+  assert.equal(denied.status, 401, denied.body);
+
+  const state = await invoke(api.publicRoutes.get('/plugins/dsh-agent-team-workflow/public/api/state'), {
+    url: `/plugins/dsh-agent-team-workflow/public/api/state?session=${SESSION}&token=${encodeURIComponent(api.publicToken)}`,
+  });
+  assert.equal(state.status, 200);
+  assert.equal(state.json.defined, true);
 });

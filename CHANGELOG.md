@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.8.0
+
+- Open the board through DSH's native sidebar Browser tab
+  (`sidebarRight.openTab('browser', …)`) instead of a custom overlay first.
+- Add token-protected loopback board/API routes on the alternate `localhost`
+  hostname; the Browser tab refuses application-origin URLs.
+- `team_workflow_status` `boardUrl` now points at that native route.
+- Keep the in-app overlay as a fallback when the Browser tab type is unavailable.
+
 ## 1.7.2
 
 - Board buttons now open the board in an in-app full-screen iframe overlay

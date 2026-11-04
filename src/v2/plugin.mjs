@@ -84,13 +84,13 @@ export function apply(ctx, config = {}) {
     },
   }, 'dsh-agent-team-workflow: ' + tool.name);
 
+  const webApi = installWebApi({ ctx, dataRoot: settings.dataDir ?? defaultDataDir(), agents, settings, logger: console });
+
   mount(toolDefine({ storeFor }));
   mount(toolStart({ storeFor }));
   mount(toolRun({ storeFor, ctx, settings, cwdOf }));
   mount(toolDecide({ storeFor }));
-  mount(toolStatus({ storeFor, ctx }));
-
-  installWebApi({ ctx, dataRoot: settings.dataDir ?? defaultDataDir(), agents, settings, logger: console });
+  mount(toolStatus({ storeFor, ctx, boardUrl: webApi.boardUrl }));
 
   if (ctx.systemPrompt && typeof ctx.systemPrompt.section === 'function') {
     ctx.systemPrompt.section({ name: 'dsh-agent-team-workflow:usage', order: settings.promptSectionOrder, text: USAGE });
@@ -241,7 +241,7 @@ function toolDecide({ storeFor }) {
   };
 }
 
-function toolStatus({ storeFor, ctx }) {
+function toolStatus({ storeFor, ctx, boardUrl }) {
   return {
     name: 'team_workflow_status',
     description: 'Show the stored v2 definition summary and the latest run: status, waiting human decisions, token counts and the optional board URL.',
@@ -261,12 +261,13 @@ function toolStatus({ storeFor, ctx }) {
       const state = await loadRun(store, args?.runId).catch(() => null);
       const session = exec?.agent?.id ?? 'local';
       const origin = ctx.get?.('webServer')?.getOrigin?.() ?? '';
-      const boardUrl = `${String(origin).replace(/\/$/, '')}/plugins/dsh-agent-team-workflow/board?session=${encodeURIComponent(session)}`;
+      const fallback = `${String(origin).replace(/\/$/, '')}/plugins/dsh-agent-team-workflow/board?session=${encodeURIComponent(session)}`;
+      const publicUrl = typeof boardUrl === 'function' ? boardUrl(session) : null;
       return {
         defined: stored !== null,
         summary: stored ? describeDefinition(stored.definition) : 'no workflow defined',
         run: state ? summarizeRun(state) : { status: 'none' },
-        boardUrl,
+        boardUrl: publicUrl || fallback,
       };
     },
   };

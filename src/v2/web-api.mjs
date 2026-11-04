@@ -8,6 +8,7 @@
 
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { normalizeDefinition } from './definition.mjs';
 import { SessionStore } from './store.mjs';
 import { DEFAULT_PERMISSIONS, decide, newRunState, run } from './runtime.mjs';
@@ -23,6 +24,8 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
   const root = path.resolve(dataRoot);
   const stores = new Map();
   const routes = new Map();
+  const publicRoutes = new Map();
+  const publicToken = typeof settings.boardToken === 'string' && settings.boardToken !== '' ? settings.boardToken : randomUUID();
 
   const storeFor = session => {
     if (typeof session !== 'string' || !SESSION_PATTERN.test(session)) {
@@ -40,12 +43,25 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
         res.destroy?.();
         return;
       }
-      sendJson(res, error?.code ? 400 : 500, {
+      sendJson(res, error?.status ?? (error?.code ? 400 : 500), {
         error: { code: error?.code ?? 'internal', message: error?.message ?? String(error) },
       });
     }
   };
   const route = (suffix, handler) => routes.set(`${ROUTE_PREFIX}${suffix}`, guard(handler));
+  const routePublic = (suffix, handler) => publicRoutes.set(`${ROUTE_PREFIX}${suffix}`, guard(handler));
+  const publicOrigin = () => alternateOrigin(ctx.get?.('webServer')?.getOrigin?.() ?? '');
+  const boardUrl = session => {
+    const origin = publicOrigin();
+    if (!origin || typeof session !== 'string' || !SESSION_PATTERN.test(session)) return null;
+    return `${origin}${ROUTE_PREFIX}/public/board?session=${encodeURIComponent(session)}&token=${encodeURIComponent(publicToken)}`;
+  };
+  const authorizePublic = req => {
+    const url = new URL(req.url ?? '/', 'http://local');
+    const token = url.searchParams.get('token') || req.headers?.['x-atw-token'];
+    if (token !== publicToken) throw Object.assign(new Error('invalid board token'), { code: 'unauthorized', status: 401 });
+    return url;
+  };
 
   const loadState = async (store, runId) => {
     if (typeof runId === 'string' && runId !== '') return store.loadRun(runId);
@@ -77,6 +93,11 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     const store = storeFor(url.searchParams.get('session'));
     const stored = await store.loadDefinition();
     sendJson(res, 200, await readModelCatalog(ctx, stored?.definition));
+  });
+
+  route('/api/board-url', async (req, res) => {
+    const url = new URL(req.url ?? '/', 'http://local');
+    sendJson(res, 200, { url: boardUrl(url.searchParams.get('session')) ?? '' });
   });
 
   route('/api/node-model', async (req, res) => {
@@ -175,6 +196,88 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     sendJson(res, 200, panelState(stored, state));
   });
 
+  // Token-protected loopback routes for the native Browser sidebar tab. They
+  // intentionally skip the DSH Connection fence so a different localhost origin
+  // (required by the Browser tab) can load the board.
+  routePublic('/public/board', async (req, res) => {
+    const url = authorizePublic(req);
+    storeFor(url.searchParams.get('session'));
+    res.writeHead(200, {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    });
+    res.end(BOARD_HTML);
+  });
+
+  routePublic('/public/api/state', async (req, res) => {
+    const url = authorizePublic(req);
+    const session = url.searchParams.get('session');
+    const store = storeFor(session);
+    const stored = await store.loadDefinition();
+    const state = await loadState(store, url.searchParams.get('runId'));
+    sendJson(res, 200, panelState(stored, state));
+  });
+
+  routePublic('/public/api/start', async (req, res) => {
+    authorizePublic(req);
+    const body = await readJson(req);
+    const store = storeFor(body.session);
+    const stored = await store.loadDefinition();
+    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
+    const state = newRunState({
+      definition: stored.definition,
+      permissions: stored.permissions ?? DEFAULT_PERMISSIONS,
+      input: body.input !== null && typeof body.input === 'object' ? body.input : {},
+    });
+    await store.saveRun(state);
+    sendJson(res, 201, panelState(stored, state));
+  });
+
+  routePublic('/public/api/decide', async (req, res) => {
+    authorizePublic(req);
+    const body = await readJson(req);
+    const store = storeFor(body.session);
+    const stored = await store.loadDefinition();
+    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
+    const state = await loadState(store, body.runId);
+    if (!state) return sendJson(res, 409, { error: { code: 'no_run', message: 'no run exists' } });
+    decide(state, { tokenId: requireText(body.tokenId, 'tokenId'), outcome: requireText(body.outcome, 'outcome'), output: body.output ?? null });
+    await store.saveRun(state);
+    sendJson(res, 200, panelState(stored, state));
+  });
+
+  routePublic('/public/api/run', async (req, res) => {
+    authorizePublic(req);
+    const body = await readJson(req);
+    const session = body.session;
+    const store = storeFor(session);
+    const stored = await store.loadDefinition();
+    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
+    const agentExec = agents.get(session);
+    if (!agentExec) {
+      return sendJson(res, 409, { error: { code: 'no_session_agent', message: 'run once from the assistant session first' } });
+    }
+    const state = await loadState(store, body.runId);
+    if (!state) return sendJson(res, 409, { error: { code: 'no_run', message: 'no run exists' } });
+    const exec = { ...agentExec, signal: new AbortController().signal };
+    const executors = createExecutors({
+      ctx,
+      exec,
+      settings: { subagentProvider: settings.subagentProvider ?? 'spawn' },
+      cwd: agentExec.agent?.session?.header?.cwd ?? process.cwd(),
+    });
+    try {
+      await run(state, executors, { maxSteps: settings.maxSteps ?? 40 });
+    } catch (error) {
+      state.status = 'failed';
+      state.lastError = error.message;
+      logger.warn?.(`dsh-agent-team-workflow: public board run failed: ${error.message}`);
+    }
+    await store.saveRun(state);
+    sendJson(res, 200, panelState(stored, state));
+  });
+
   let attached = false;
   const connection = () => ctx.get?.('connection');
   const authenticated = handler => async (req, res) => {
@@ -200,6 +303,11 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
       if (typeof ctx.effect === 'function') ctx.effect(register, `dsh-agent-team-workflow: ${routePath}`);
       else register();
     }
+    for (const [routePath, handler] of publicRoutes) {
+      const register = () => server.register({ kind: 'exact', path: routePath, handler });
+      if (typeof ctx.effect === 'function') ctx.effect(register, `dsh-agent-team-workflow: ${routePath}`);
+      else register();
+    }
     return true;
   };
   attach();
@@ -209,7 +317,7 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     });
   }
 
-  return { routes, attach };
+  return { routes, publicRoutes, attach, boardUrl, publicToken };
 }
 
 async function readModelCatalog(ctx, definition) {
@@ -304,7 +412,21 @@ function updatedModelConfig(config, { models, provider, model }) {
   return next;
 }
 
-function sendJson(res, status, value) {  res.writeHead(status, {
+function alternateOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    if (url.hostname === '127.0.0.1') url.hostname = 'localhost';
+    else if (url.hostname === 'localhost') url.hostname = '127.0.0.1';
+    else if (url.hostname === '[::1]' || url.hostname === '::1' || url.hostname === '0.0.0.0') url.hostname = '127.0.0.1';
+    else return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function sendJson(res, status, value) {
+  res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
