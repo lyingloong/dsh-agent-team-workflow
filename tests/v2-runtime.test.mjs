@@ -111,6 +111,26 @@ test('command nodes require an explicit permission grant', async () => {
   assert.equal(normalizePermissions({ command: { mode: 'allowlist', allow: ['rm'] } }).command.mode, 'allowlist');
 });
 
+test('an unhandled fail outcome fails the run', async () => {
+  const flow = definition([{ id: 'run', type: 'command', config: { command: 'false' } }], []);
+  const state = newRunState({ definition: flow, permissions: FULL });
+  await run(state, { command: async () => ({ outcome: 'fail', output: { code: 1 } }) });
+  assert.equal(state.status, 'failed');
+  assert.equal(state.tokens[0].error.code, 'unhandled_failure');
+});
+
+test('a handled fail outcome follows its fail edge', async () => {
+  const flow = definition([
+    { id: 'run', type: 'command', config: { command: 'false' } },
+    { id: 'gate', type: 'human' },
+  ], [{ from: 'run', to: 'gate', on: 'fail' }]);
+  const state = newRunState({ definition: flow, permissions: FULL });
+  await run(state, { command: async () => ({ outcome: 'fail', output: { code: 1 } }) });
+  assert.equal(state.status, 'waiting');
+  assert.equal(state.tokens.find(token => token.nodeId === 'run').status, 'completed');
+  assert.equal(state.tokens.find(token => token.nodeId === 'gate').status, 'waiting');
+});
+
 test('http nodes enforce host allowlists', async () => {
   const flow = definition([{ id: 'fetch', type: 'http', config: { url: 'https://api.example.com/ci' } }], []);
   const allowed = newRunState({

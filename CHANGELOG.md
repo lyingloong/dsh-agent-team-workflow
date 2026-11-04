@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.1
+
+- Forward an agent node's `config.cwd` to the DSH subagent request, so a workflow
+  can target a repository other than the session's default directory. Relative
+  paths resolve against the session cwd.
+- Command/HTTP/agent nodes that return `fail` without an outgoing `on: "fail"`
+  edge now fail the run with `unhandled_failure`, instead of completing the
+  token and reporting `done`. Add the fail edge when the workflow handles it.
+- Tests for both behaviors.
+
 ## 1.1.0
 
 - Add a model picker to every agent node in the panel. The list comes from the

@@ -29,6 +29,7 @@ export function createExecutors({ ctx, exec, settings, cwd }) {
       if (model && model !== 'host-default') agentOptions.model = model;
       if (lane?.reasoningEffort) agentOptions.reasoningEffort = lane.reasoningEffort;
       if (lane?.maxTokens) agentOptions.maxTokens = lane.maxTokens;
+      const agentCwd = node.config.cwd ? path.resolve(cwd, node.config.cwd) : cwd;
       const outcomes = Array.isArray(node.config.outcomes) && node.config.outcomes.length > 0
         ? node.config.outcomes
         : node.config.outcome ? [node.config.outcome] : ['complete'];
@@ -39,7 +40,7 @@ export function createExecutors({ ctx, exec, settings, cwd }) {
         request: {
           prompt: [{ type: 'text', text: prompt }],
           parent: exec.agent,
-          cwd,
+          cwd: agentCwd,
           ...(Object.keys(agentOptions).length > 0 ? { agentOptions } : {}),
         },
         signal: exec.signal,

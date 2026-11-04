@@ -132,7 +132,7 @@ a restricted workflow (agent/human/fanout/join only) or use an allowlist.
 
 | Type | Config | Behavior |
 | --- | --- | --- |
-| `agent` | `role?`, `prompt?`, `lane?`, `provider?`, `model?`, `outcomes?`, `outcome?` | Spawns a DSH subagent. The child returns JSON `{outcome, output}`; plain text becomes `{text}`. |
+| `agent` | `role?`, `prompt?`, `lane?`, `provider?`, `model?`, `cwd?`, `outcomes?`, `outcome?` | Spawns a DSH subagent. The child returns JSON `{outcome, output}`; plain text becomes `{text}`. |
 | `command` | `command`, `cwd?`, `timeoutMs?` | Runs a shell command in the session cwd. Exit 0 → `complete`; non-zero → `fail`. |
 | `http` | `url`, `method?`, `headers?`, `body?`, `timeoutMs?` | `fetch`; 2xx → `complete`, otherwise `fail`. |
 | `human` | `title?`, `outcomes?` | Waits for `team_workflow_decide` or the panel. Default outcomes: `approve`, `reject`. |
@@ -143,7 +143,12 @@ a restricted workflow (agent/human/fanout/join only) or use an allowlist.
 Agent nodes use the lane's `adapter/model/reasoningEffort/maxTokens` as subagent
 `agentOptions`. `model: "host-default"` inherits the host model. An explicit
 `provider`/`model` on the node overrides the lane and is what the panel writes
-when you pick a model.
+when you pick a model. `cwd` is forwarded to the subagent as its starting
+directory; relative paths resolve against the session working directory.
+
+A command exits 0 for `complete` and non-zero for `fail`. A `fail` outcome must
+have an outgoing `on: "fail"` edge; otherwise the run itself fails with
+`unhandled_failure` instead of silently reporting `done`.
 
 ### Inputs and outputs
 
