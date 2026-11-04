@@ -23,8 +23,10 @@ export function createExecutors({ ctx, exec, settings, cwd }) {
       }
       const lane = definition.providers.find(provider => provider.id === node.config.lane) ?? null;
       const agentOptions = {};
-      if (lane?.adapter) agentOptions.provider = lane.adapter;
-      if (lane?.model && lane.model !== 'host-default') agentOptions.model = lane.model;
+      const provider = node.config.provider ?? lane?.adapter;
+      const model = node.config.model ?? lane?.model;
+      if (provider) agentOptions.provider = provider;
+      if (model && model !== 'host-default') agentOptions.model = model;
       if (lane?.reasoningEffort) agentOptions.reasoningEffort = lane.reasoningEffort;
       if (lane?.maxTokens) agentOptions.maxTokens = lane.maxTokens;
       const outcomes = Array.isArray(node.config.outcomes) && node.config.outcomes.length > 0

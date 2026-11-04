@@ -33,7 +33,9 @@ export function normalizeDefinition(raw, { depth = 0 } = {}) {
     errors.push({ path: '$.apiVersion', message: `must be ${API_VERSION}` });
   }
   const name = text(raw.name, '$.name', errors, 120);
-  const description = raw.description === undefined ? '' : text(raw.description, '$.description', errors, 2000);
+  const description = raw.description === undefined || raw.description === null || raw.description === ''
+    ? ''
+    : text(raw.description, '$.description', errors, 2000);
   const providers = readProviders(raw.providers, errors);
   const nodes = readNodes(raw.nodes, errors, depth);
   const nodeIds = new Set(nodes.map(node => node.id));
@@ -89,10 +91,10 @@ function readProviders(raw, errors) {
     if (!id) return [];
     return [{
       id,
-      adapter: value.adapter === undefined ? null : text(value.adapter, `${path}.adapter`, errors, 120),
-      model: value.model === undefined ? null : text(value.model, `${path}.model`, errors, 200),
-      reasoningEffort: value.reasoningEffort === undefined ? null : text(value.reasoningEffort, `${path}.reasoningEffort`, errors, 80),
-      maxTokens: value.maxTokens === undefined ? null : integer(value.maxTokens, `${path}.maxTokens`, errors, 1, 1_000_000),
+      adapter: value.adapter === undefined || value.adapter === null ? null : text(value.adapter, `${path}.adapter`, errors, 120),
+      model: value.model === undefined || value.model === null ? null : text(value.model, `${path}.model`, errors, 200),
+      reasoningEffort: value.reasoningEffort === undefined || value.reasoningEffort === null ? null : text(value.reasoningEffort, `${path}.reasoningEffort`, errors, 80),
+      maxTokens: value.maxTokens === undefined || value.maxTokens === null ? null : integer(value.maxTokens, `${path}.maxTokens`, errors, 1, 1_000_000),
     }];
   });
 }
@@ -125,8 +127,8 @@ function readNodes(raw, errors, depth) {
     }
     const inputs = value.inputs === undefined ? {} : (isObject(value.inputs) ? value.inputs : (errors.push({ path: `${path}.inputs`, message: 'must be an object' }), {}));
     const config = value.config === undefined ? {} : (isObject(value.config) ? value.config : (errors.push({ path: `${path}.config`, message: 'must be an object' }), {}));
-    const role = value.role === undefined ? null : text(value.role, `${path}.role`, errors, 80);
-    const title = value.title === undefined ? null : text(value.title, `${path}.title`, errors, 200);
+    const role = value.role === undefined || value.role === null ? null : text(value.role, `${path}.role`, errors, 80);
+    const title = value.title === undefined || value.title === null ? null : text(value.title, `${path}.title`, errors, 200);
     const node = { id, type, title, role, inputs: { ...inputs }, config: { ...config } };
     validateNodeConfig(node, path, errors, depth);
     nodes.push(node);
@@ -139,6 +141,8 @@ function validateNodeConfig(node, path, errors, depth) {
   if (node.type === 'agent') {
     if (config.prompt !== undefined) text(config.prompt, `${path}.config.prompt`, errors, 20_000);
     if (config.lane !== undefined) text(config.lane, `${path}.config.lane`, errors, 80);
+    if (config.provider !== undefined) text(config.provider, `${path}.config.provider`, errors, 120);
+    if (config.model !== undefined) text(config.model, `${path}.config.model`, errors, 200);
     if (config.outcome !== undefined) text(config.outcome, `${path}.config.outcome`, errors, 80);
   } else if (node.type === 'command') {
     if (config.command === undefined) errors.push({ path: `${path}.config.command`, message: 'is required' });

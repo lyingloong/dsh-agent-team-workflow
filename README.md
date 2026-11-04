@@ -132,7 +132,7 @@ a restricted workflow (agent/human/fanout/join only) or use an allowlist.
 
 | Type | Config | Behavior |
 | --- | --- | --- |
-| `agent` | `role?`, `prompt?`, `lane?`, `outcomes?`, `outcome?` | Spawns a DSH subagent. The child returns JSON `{outcome, output}`; plain text becomes `{text}`. |
+| `agent` | `role?`, `prompt?`, `lane?`, `provider?`, `model?`, `outcomes?`, `outcome?` | Spawns a DSH subagent. The child returns JSON `{outcome, output}`; plain text becomes `{text}`. |
 | `command` | `command`, `cwd?`, `timeoutMs?` | Runs a shell command in the session cwd. Exit 0 → `complete`; non-zero → `fail`. |
 | `http` | `url`, `method?`, `headers?`, `body?`, `timeoutMs?` | `fetch`; 2xx → `complete`, otherwise `fail`. |
 | `human` | `title?`, `outcomes?` | Waits for `team_workflow_decide` or the panel. Default outcomes: `approve`, `reject`. |
@@ -141,7 +141,9 @@ a restricted workflow (agent/human/fanout/join only) or use an allowlist.
 | `subworkflow` | `definition` | Runs an inline nested definition and exposes its context as the node output. |
 
 Agent nodes use the lane's `adapter/model/reasoningEffort/maxTokens` as subagent
-`agentOptions`. `model: "host-default"` inherits the host model.
+`agentOptions`. `model: "host-default"` inherits the host model. An explicit
+`provider`/`model` on the node overrides the lane and is what the panel writes
+when you pick a model.
 
 ### Inputs and outputs
 
@@ -199,6 +201,8 @@ The right-sidebar **工作流** tab shows:
 - the node graph, with node type, role and execution count;
 - the current run status, duration, token counts and permission grant;
 - waiting human decisions with outcome buttons;
+- a model picker on every selected agent node, populated from the host's LLM
+  provider/model catalog; the choice is saved in the node config;
 - the selected node's config, latest token, output and errors;
 - run context and the token execution log.
 
