@@ -6,7 +6,7 @@
  * compatibility layer.
  */
 
-import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 export class SessionStore {
@@ -62,6 +62,10 @@ export class SessionStore {
       }
     }
     return runs.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  }
+
+  async clearRuns() {
+    await rm(this.runsDir, { recursive: true, force: true });
   }
 
   async latestRun() {

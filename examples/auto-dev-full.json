@@ -1,0 +1,119 @@
+{
+  "apiVersion": 2,
+  "name": "auto-dev-full",
+  "description": "One complete development flow: discover a requirement, approve it, implement, test, review with a revision loop, open a PR, decide the pending PR, and merge.",
+  "entry": "discover",
+  "nodes": [
+    {
+      "id": "discover",
+      "type": "agent",
+      "title": "Discover requirement",
+      "role": "analyst",
+      "inputs": { "goal": "$input.goal" },
+      "config": {
+        "prompt": "Inspect the repository and choose exactly one small, high-value improvement. Do not edit files. Return JSON with title, body, acceptance (array), files (array), and plan (string)."
+      }
+    },
+    {
+      "id": "plan",
+      "type": "agent",
+      "title": "Plan implementation",
+      "role": "architect",
+      "inputs": { "requirement": "$nodes.discover.output" },
+      "config": {
+        "prompt": "Turn the requirement into a concrete implementation plan. Return JSON with steps, files, risks, and a test strategy. Do not edit files."
+      }
+    },
+    {
+      "id": "seed_review",
+      "type": "human",
+      "title": "Approve requirement",
+      "config": { "outcomes": ["approve", "reject"] }
+    },
+    {
+      "id": "branch",
+      "type": "command",
+      "title": "Create feature branch",
+      "config": {
+        "command": "git switch auto/auto-dev || git switch -c auto/auto-dev",
+        "timeoutMs": 60000
+      }
+    },
+    {
+      "id": "implement",
+      "type": "agent",
+      "title": "Implement",
+      "role": "engineer",
+      "inputs": {
+        "requirement": "$nodes.discover.output",
+        "plan": "$nodes.plan.output",
+        "review": "$nodes.review.output",
+        "pr_review": "$nodes.pr_review.output"
+      },
+      "config": {
+        "prompt": "Implement the approved requirement in the current repository. Follow AGENTS.md. Do not commit, push or open a PR; command nodes handle that. Address review and PR feedback when present. Return JSON with summary and changed paths."
+      }
+    },
+    {
+      "id": "verify",
+      "type": "command",
+      "title": "Run tests",
+      "config": { "command": "npm test", "timeoutMs": 600000 }
+    },
+    {
+      "id": "review",
+      "type": "agent",
+      "title": "Review",
+      "role": "reviewer",
+      "inputs": {
+        "requirement": "$nodes.discover.output",
+        "plan": "$nodes.plan.output",
+        "implementation": "$nodes.implement.output",
+        "tests": "$nodes.verify.output"
+      },
+      "config": {
+        "outcomes": ["pass", "needs_revision"],
+        "prompt": "Review the working tree against the requirement, plan and test result. Use pass only when no required change remains. Return JSON {\"outcome\":\"pass|needs_revision\",\"output\":...}."
+      }
+    },
+    {
+      "id": "pr",
+      "type": "command",
+      "title": "Open PR",
+      "config": {
+        "command": "git add -A && (git diff --cached --quiet || git commit -m \"auto: requirement implementation\") && git push -u origin auto/auto-dev && (gh pr create --fill || echo PR_EXISTS) && gh pr view --json url -q .url",
+        "timeoutMs": 600000
+      }
+    },
+    {
+      "id": "pr_review",
+      "type": "human",
+      "title": "Review pending PR",
+      "config": { "outcomes": ["approve", "reject"] }
+    },
+    {
+      "id": "merge",
+      "type": "command",
+      "title": "Merge PR",
+      "config": {
+        "command": "gh pr merge auto/auto-dev --merge",
+        "timeoutMs": 300000
+      }
+    }
+  ],
+  "edges": [
+    { "from": "discover", "to": "plan", "on": "complete" },
+    { "from": "plan", "to": "seed_review", "on": "complete" },
+    { "from": "seed_review", "to": "branch", "on": "approve" },
+    { "from": "seed_review", "to": "discover", "on": "reject" },
+    { "from": "branch", "to": "implement", "on": "complete" },
+    { "from": "implement", "to": "verify", "on": "complete" },
+    { "from": "verify", "to": "review", "on": "complete" },
+    { "from": "verify", "to": "implement", "on": "fail" },
+    { "from": "review", "to": "pr", "on": "pass" },
+    { "from": "review", "to": "implement", "on": "needs_revision" },
+    { "from": "pr", "to": "pr_review", "on": "complete" },
+    { "from": "pr_review", "to": "merge", "on": "approve" },
+    { "from": "pr_review", "to": "implement", "on": "reject" }
+  ]
+}

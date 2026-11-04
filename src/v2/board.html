@@ -452,7 +452,7 @@ button { cursor: pointer; }
   function layout(definition) {
     const { rank, groups, incoming } = longestRanks(definition);
     orderRanks(groups, incoming);
-    const nodeWidth = 440, nodeHeight = 100, gapY = 52, gapX = 24, sidePad = 120, topPad = 28;
+    const nodeWidth = 340, nodeHeight = 100, gapY = 52, gapX = 24, sidePad = 120, topPad = 28;
     const keys = [...groups.keys()].sort((a, b) => a - b);
     const rowWidth = Math.max(nodeWidth, ...keys.map(key => groups.get(key).length * nodeWidth + (groups.get(key).length - 1) * gapX));
     const width = rowWidth + sidePad * 2;
@@ -602,7 +602,7 @@ button { cursor: pointer; }
       const token = byNode.get(node.id);
       const status = tone(token?.status);
       const style = STYLE[node.type] || { color: "#8a929e", glyph: "?" };
-      const titleLines = wrap(node.title || node.id, 366);
+      const titleLines = wrap(node.title || node.id, 266);
       const metaY = node.y + (titleLines.length > 1 ? 58 : 48);
       const detailY = metaY + 16;
       const dotColor = status === "failed" ? "var(--bad)" : status === "wait" ? "var(--warn)" : status === "done" ? "var(--ok)" : status === "running" ? "var(--brand)" : "var(--line-strong)";
@@ -617,8 +617,8 @@ button { cursor: pointer; }
       titleLines.forEach((line, index) => parts.push('<tspan x="' + (node.x + 48) + '" dy="' + (index ? 16 : 0) + '">' + esc(line) + "</tspan>"));
       parts.push("</text>");
       const meta = (TYPE[node.type] || node.type) + (node.role ? " · " + node.role : "");
-      parts.push('<text x="' + (node.x + 48) + '" y="' + metaY + '" class="node-meta">' + esc(clip(meta, 340)) + "</text>");
-      parts.push('<text x="' + (node.x + 48) + '" y="' + detailY + '" class="node-detail-text">' + esc(clip(detailText(node), 370)) + "</text>");
+      parts.push('<text x="' + (node.x + 48) + '" y="' + metaY + '" class="node-meta">' + esc(clip(meta, 260)) + "</text>");
+      parts.push('<text x="' + (node.x + 48) + '" y="' + detailY + '" class="node-detail-text">' + esc(clip(detailText(node), 290)) + "</text>");
       parts.push('<circle cx="' + (node.x + 16) + '" cy="' + (node.y + node.h - 14) + '" r="3.2" fill="' + dotColor + '" stroke="var(--panel)" stroke-width="1.4"/>');
       if (statusLabel) parts.push('<text x="' + (node.x + 24) + '" y="' + (node.y + node.h - 11) + '" class="node-status-label">' + esc(statusLabel) + "</text>");
       const count = counts.get(node.id) || 0;

@@ -151,6 +151,17 @@ test('status reports no run before start and rejects malformed definitions', asy
   assert.match(rejected.errors[0].path, /nodes/);
 });
 
+test('redefining a workflow clears the previous run', async (t) => {
+  const { call } = setup(t);
+  await call('team_workflow_define', { definition: HUMAN_AGENT });
+  await call('team_workflow_start', { input: { task: 'build' } });
+  const before = await call('team_workflow_status', {});
+  assert.notEqual(before.run.status, 'none');
+  await call('team_workflow_define', { definition: HUMAN_AGENT });
+  const after = await call('team_workflow_status', {});
+  assert.equal(after.run.status, 'none');
+});
+
 test('fan-out run reports only human decisions and reaches done', async (t) => {
   const { call } = setup(t);
   const flow = {
