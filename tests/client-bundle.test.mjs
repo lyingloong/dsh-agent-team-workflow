@@ -70,7 +70,7 @@ test('client registers the right-sidebar tab and opens it from the conversation 
   assert.ok(SOURCE.includes('openTab("team-workflow")'));
   assert.ok(SOURCE.includes('/plugins/dsh-agent-team-workflow/api'));
   assert.ok(SOURCE.includes('/state?session='));
-  assert.ok(!SOURCE.includes('/board?session='));
+  assert.ok(SOURCE.includes('/board?session='));
   assert.ok(SOURCE.includes('sessionId'));
 });
 
