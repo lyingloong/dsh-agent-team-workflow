@@ -85,6 +85,7 @@ function setup(t) {
   };
   const api = installWebApi({ ctx, dataRoot, agents, settings: { subagentProvider: 'spawn', maxSteps: 10 }, logger: { warn() {} } });
   const store = new SessionStore(path.join(dataRoot, 'sessions', SESSION));
+  t.after(() => api.closeBoardServer());
   t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 }));
   return { routes, store, api };
 }
@@ -140,11 +141,6 @@ test('v2 web API supports state, start, decide and run', async (t) => {
     '/plugins/dsh-agent-team-workflow/api/start',
     '/plugins/dsh-agent-team-workflow/api/state',
     '/plugins/dsh-agent-team-workflow/board',
-    '/plugins/dsh-agent-team-workflow/public/api/decide',
-    '/plugins/dsh-agent-team-workflow/public/api/run',
-    '/plugins/dsh-agent-team-workflow/public/api/start',
-    '/plugins/dsh-agent-team-workflow/public/api/state',
-    '/plugins/dsh-agent-team-workflow/public/board',
   ]);
   await store.saveDefinition({ definition: FLOW, permissions: { command: { mode: 'full', allow: [] } } });
 
@@ -293,12 +289,18 @@ test('board URL serves the standalone HTML board', async (t) => {
   assert.match(board.body, /\/state\?session=/);
 });
 
-test('public board URL is token-scoped and served on the alternate localhost origin', async (t) => {
+test('public board URL is token-scoped and served by the loopback board server', async (t) => {
   const { api, store } = setup(t);
+  const base = await api.boardReady;
+  assert.match(base, /^http:\/\/127\.0\.0\.1:\d+$/);
   const url = api.boardUrl(SESSION);
-  assert.match(url, /^http:\/\/localhost:1234\//);
+  assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\//);
   assert.match(url, /token=/);
   await store.saveDefinition({ definition: FLOW, permissions: { command: { mode: 'full', allow: [] } } });
+
+  const live = await fetch(url);
+  assert.equal(live.status, 200);
+  assert.match(await live.text(), /工作流看板/);
 
   const board = await invokeRaw(api.publicRoutes.get('/plugins/dsh-agent-team-workflow/public/board'), {
     url: `/plugins/dsh-agent-team-workflow/public/board?session=${SESSION}&token=${encodeURIComponent(api.publicToken)}`,

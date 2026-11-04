@@ -258,26 +258,26 @@ run once from the assistant or call a tool first.
 
 ## Board URL and native Browser tab
 
-The board is served by the plugin's existing web server. The sidebar opens it
-through DSH's native Browser tab:
+The board is served by a dedicated token-protected loopback HTTP server bound to
+`127.0.0.1` on an ephemeral port. The sidebar opens it through DSH's native
+Browser tab:
 
 ```js
 ctx.sidebarRight.openTab('browser', { params: { url } })
 ```
 
-The Browser tab refuses URLs on the DSH application origin, so the status URL
-uses the alternate loopback host (`localhost` vs `127.0.0.1`) and a random
-token:
+The separate origin is required twice: the Browser tab refuses URLs on the DSH
+application origin, and serving from the application web server lets its framing
+middleware block the page inside the Browser tab. A standalone server avoids
+both. The URL is:
 
 ```
-http://localhost:<port>/plugins/dsh-agent-team-workflow/public/board?session=<session-id>&token=<token>
+http://127.0.0.1:<board-port>/plugins/dsh-agent-team-workflow/public/board?session=<session-id>&token=<token>
 ```
 
-`team_workflow_status` returns this as `boardUrl`. The public route is
-token-protected and loopback-only; it intentionally bypasses the DSH Connection
-fence because the Browser tab cannot send the application origin/cookies. It is
-the same web server and port, not a second server. Do not share the URL: the
-token grants board access.
+`team_workflow_status` returns this as `boardUrl`. The server is loopback-only,
+token-protected and has no DSH Connection fence; it is a second loopback port,
+not the Harness web server. Do not share the URL: the token grants board access.
 
 The page shows a full-height graph fitted to the available space, with wider
 cards, scroll preservation and a selected-only node detail card; it can start a
