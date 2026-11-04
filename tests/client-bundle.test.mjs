@@ -112,22 +112,37 @@ test('apply registers the tab, the pane body and the header entry', () => {
   assert.equal(captured.opened, 'team-workflow');
 });
 
-test('graph uses Cytoscape with dagre layout and taxi edge routing', () => {
-  assert.ok(SOURCE.includes('cytoscape'));
-  assert.ok(SOURCE.includes('cytoscape-dagre'));
-  assert.ok(SOURCE.includes('name: "dagre"'));
-  assert.ok(SOURCE.includes('"curve-style": "taxi"'));
-  assert.ok(SOURCE.includes('atw-graph-canvas'));
-  assert.ok(SOURCE.includes('atw-graph-tool'));
-  assert.ok(SOURCE.includes('function graphElements'));
+test('buildGraph layers a v2 branch, labels outcomes and routes a loop', () => {
+  const start = SOURCE.indexOf('function buildGraph');
+  const end = SOURCE.indexOf('function WorkflowGraph');
+  assert.ok(start > 0 && end > start);
+  const buildGraph = new Function(`${SOURCE.slice(start, end)}; return buildGraph;`)();
+  const graph = buildGraph({
+    entry: 'a',
+    nodes: [
+      { id: 'a', title: 'A', type: 'human' },
+      { id: 'b', title: 'B', type: 'agent', role: 'reviewer' },
+      { id: 'c', title: 'C', type: 'command' },
+    ],
+    edges: [
+      { from: 'a', to: 'b', on: 'approve' },
+      { from: 'b', to: 'c', on: 'pass' },
+      { from: 'b', to: 'b', on: 'needs_revision' },
+    ],
+  });
+  const a = graph.nodes.find(node => node.id === 'a');
+  const b = graph.nodes.find(node => node.id === 'b');
+  const c = graph.nodes.find(node => node.id === 'c');
+  assert.ok(a.y < b.y && b.y < c.y);
+  assert.ok(graph.edges.some(edge => edge.label === 'approve'));
+  assert.ok(graph.edges.some(edge => edge.label === 'needs_revision'));
+  assert.ok(graph.nodes.every(node => node.type && node.x !== undefined));
 });
 
 test('panel exposes v2 run state, node details, decisions and permissions', () => {
   assert.ok(SOURCE.includes('function WorkflowGraph'));
-  assert.ok(SOURCE.includes('atw-graph-canvas'));
-  assert.ok(SOURCE.includes('atw-graph-tool'));
-  assert.ok(SOURCE.includes('"curve-style": "taxi"'));
-  assert.ok(SOURCE.includes('name: "dagre"'));
+  assert.ok(SOURCE.includes('atw-graph-svg'));
+  assert.ok(SOURCE.includes('edge.label'));
   assert.ok(SOURCE.includes('run?.waiting'));
   assert.ok(SOURCE.includes('run?.tokens'));
   assert.ok(!SOURCE.includes('atw-progress'));
@@ -142,7 +157,9 @@ test('panel exposes v2 run state, node details, decisions and permissions', () =
   assert.ok(SOURCE.includes('atw-model-row'));
   assert.ok(SOURCE.includes('changeModels'));
   assert.ok(SOURCE.includes('ResizeObserver'));
-  assert.ok(SOURCE.includes('graphElements'));
-  assert.ok(SOURCE.includes('graphLabel'));
+  assert.ok(SOURCE.includes('markerWidth: 10'));
+  assert.ok(SOURCE.includes('strokeWidth: 1.5'));
+  assert.ok(SOURCE.includes('atw-graph-glyph'));
   assert.ok(SOURCE.includes('TYPE_STYLE'));
+  assert.ok(SOURCE.includes('atw-graph-box.type-'));
 });
