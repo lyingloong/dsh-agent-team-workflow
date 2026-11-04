@@ -29,7 +29,7 @@ const DEFAULT_CONFIG = {
 const USAGE = `Agent Team Workflow v2 is a node-graph workflow engine.
 
 A workflow is nodes plus edges. Node types:
-- agent: a model subagent. Config: prompt?, lane?, provider?, model?, models?, cwd?, outcome?, outcomes?; optional role label. The models array is an ordered fallback list; the panel edits it.
+- agent: a model subagent. Config: prompt?, lane?, provider?, model?, models?, cwd?, outcome?, outcomes?; optional role label. The models array is an ordered fallback list.
 - command: a shell command. Config: command, cwd?, timeoutMs?. Requires a command permission grant.
 - http: an HTTP request. Config: url, method?, headers?, body?, timeoutMs?. Requires an HTTP grant.
 - human: waits for a decision. Config: title?, outcomes? (default approve/reject).
@@ -39,7 +39,7 @@ A workflow is nodes plus edges. Node types:
 
 Inputs map values from "$input", "$nodes.<id>.output", "$item", "$index" or "$context".
 Edges select the next node: {from, to, on}. "on" is the outcome (default complete).
-Keep node ids short kebab-case and node titles concise (about 12 Chinese characters or 24 Latin characters); the panel wraps to two lines but brevity reads better.
+Keep node ids short kebab-case and node titles concise (about 12 Chinese characters or 24 Latin characters); the board wraps to two lines but brevity reads better.
 
 Permissions are NOT part of the definition. Before creating a workflow that uses
 command/http nodes, ask the user whether to grant full/allowlist access.

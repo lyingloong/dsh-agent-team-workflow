@@ -6,231 +6,261 @@
 <title>工作流看板</title>
 <style>
 :root {
-  color-scheme: light dark;
-  --bg: #f6f7f9;
+  color-scheme: light;
+  --bg: #f4f6f8;
   --panel: #ffffff;
-  --panel-2: #f1f3f6;
-  --line: #dfe3e8;
-  --text: #1c2128;
-  --muted: #6b7480;
+  --panel-2: #f7f8fa;
+  --line: #e2e6eb;
+  --line-strong: #cbd2dc;
+  --text: #1f2937;
+  --muted: #6b7280;
   --brand: #4f7cff;
-  --warn: #b06b12;
-  --ok: #2f8a55;
-  --bad: #c53b3b;
-  --radius: 12px;
-  --shadow: 0 8px 28px rgba(20, 30, 50, .08);
+  --ok: #16a34a;
+  --warn: #d97706;
+  --bad: #dc2626;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .05);
+  --radius: 10px;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #12161c;
-    --panel: #1a2028;
-    --panel-2: #232b35;
-    --line: #303b48;
-    --text: #e8edf4;
-    --muted: #93a0b2;
-    --shadow: 0 10px 30px rgba(0, 0, 0, .3);
+    color-scheme: dark;
+    --bg: #111418;
+    --panel: #191d23;
+    --panel-2: #20252c;
+    --line: #2a313a;
+    --line-strong: #3a434f;
+    --text: #e6eaf0;
+    --muted: #99a2af;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .28);
   }
 }
 * { box-sizing: border-box; }
-body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 13px/1.45 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+html, body { margin: 0; min-height: 100%; }
+body { background: var(--bg); color: var(--text); font: 13px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
 button, textarea { font: inherit; }
-.top { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(12px); }
-.mark { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); font-weight: 700; }
-.copy { min-width: 0; }
-.name { font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sub { color: var(--muted); font-size: 11px; }
-.top-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.status { padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 10px; white-space: nowrap; }
-.status.running { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 40%, transparent); }
-.status.waiting { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
-.status.done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
-.status.failed { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
-.wrap { max-width: 980px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+button { cursor: pointer; }
+.top { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(10px); }
+.top-inner { max-width: 1280px; margin: 0 auto; padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mark { width: 30px; height: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: color-mix(in srgb, var(--brand) 13%, transparent); color: var(--brand); font-size: 15px; font-weight: 700; }
+.brand h1 { margin: 0; font-size: 15px; line-height: 1.3; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand p { margin: 1px 0 0; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.status { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; white-space: nowrap; }
+.status.waiting { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 38%, var(--line)); background: color-mix(in srgb, var(--warn) 8%, var(--panel)); }
+.status.running { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 38%, var(--line)); background: color-mix(in srgb, var(--brand) 8%, var(--panel)); }
+.status.done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 38%, var(--line)); background: color-mix(in srgb, var(--ok) 8%, var(--panel)); }
+.status.failed { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 38%, var(--line)); background: color-mix(in srgb, var(--bad) 8%, var(--panel)); }
+.perm { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); font-size: 10.5px; white-space: nowrap; }
+.perm.on { color: var(--text); border-color: color-mix(in srgb, var(--ok) 30%, var(--line)); }
+.btn { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--text); padding: 6px 11px; font-size: 12px; white-space: nowrap; transition: background .12s ease, border-color .12s ease; }
+.btn:hover { background: var(--panel-2); border-color: var(--line-strong); }
+.btn.primary { background: var(--brand); border-color: transparent; color: #fff; }
+.btn.primary:hover { background: color-mix(in srgb, var(--brand) 88%, #000); }
+.btn.ghost { background: transparent; }
+.btn[disabled] { opacity: .45; cursor: default; }
+.icon-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; }
+.icon-btn:hover { background: var(--panel-2); color: var(--text); }
+.page { max-width: 1280px; margin: 0 auto; padding: 16px 18px 40px; }
+.top-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
-.card-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
-.card-head strong { font-size: 12px; }
-.card-head .hint { margin-left: auto; color: var(--muted); font-size: 10px; }
-.graph { height: calc(100vh - 150px); min-height: 520px; display: flex; align-items: flex-start; justify-content: center; overflow: auto; padding: 14px; background-image: radial-gradient(circle, color-mix(in srgb, var(--line) 55%, transparent) .7px, transparent .8px); background-size: 16px 16px; box-sizing: border-box; }
+.card-head { min-height: 40px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.card-head strong { font-size: 12px; letter-spacing: .01em; }
+.card-head .hint { color: var(--muted); font-size: 10.5px; }
+.card-head .spacer { flex: 1; }
+.legend { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 10px; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 3px; vertical-align: 1px; }
+.graph-card { min-width: 0; }
+.graph { height: clamp(520px, 66vh, 760px); display: flex; align-items: flex-start; justify-content: center; overflow: auto; padding: 16px; background-image: radial-gradient(circle, color-mix(in srgb, var(--line) 76%, transparent) .8px, transparent 1px); background-size: 18px 18px; }
 .graph svg { flex: none; display: block; }
 .node { cursor: pointer; }
-.node:hover .node-box { stroke-width: 1.4; filter: drop-shadow(0 2px 5px rgba(0,0,0,.16)); }
-.node-box { fill: var(--panel); stroke: var(--line); stroke-width: .9; filter: drop-shadow(0 1px 2px rgba(0,0,0,.08)); }
-.node-box.active { stroke: var(--brand); }
-.node-box.wait { stroke: var(--warn); stroke-width: 1.6; }
-.node-box.done { stroke: color-mix(in srgb, var(--ok) 35%, var(--line)); }
-.node-box.error { stroke: var(--bad); stroke-width: 1.6; }
-.node-title { font-size: 10.5px; font-weight: 600; fill: var(--text); }
-.node-sub { font-size: 8.5px; fill: var(--muted); }
-.node-model { font-size: 8.5px; fill: var(--muted); }
-.node-glyph { font-size: 9px; font-weight: 700; fill: #fff; }
-.edge-label { font-size: 9px; font-weight: 500; fill: var(--muted); }
-.edge-pill { fill: var(--panel); stroke: var(--line); stroke-width: .5; }
-.waiting { padding: 10px 12px; }
-.wait-title { color: var(--warn); font-size: 11px; font-weight: 600; margin-bottom: 7px; }
-.decision { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
-.decision span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.btn { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--text); padding: 4px 9px; cursor: pointer; font-size: 11px; white-space: nowrap; }
-.btn:hover { background: var(--panel-2); }
-.btn.primary { background: var(--brand); border-color: transparent; color: #fff; }
-.btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
-.btn[disabled] { opacity: .45; cursor: default; }
-.side { display: flex; flex-direction: column; gap: 14px; }
-.btn-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
-.side-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-textarea { width: 100%; min-height: 86px; resize: vertical; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); padding: 7px; font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
-.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 8px; font-size: 11px; }
-.kv dt { color: var(--muted); }
-.kv dd { margin: 0; overflow-wrap: anywhere; }
-pre { margin: 0; max-height: 240px; overflow: auto; padding: 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.node-detail { display: none; }
-.card.hide { display: none; }
-.node-detail.show { display: block; }
-.empty { padding: 32px 18px; text-align: center; color: var(--muted); }
+.node:hover .node-box { filter: drop-shadow(0 3px 8px rgba(16, 24, 40, .14)); }
+.node-box { fill: var(--panel); stroke: var(--line); stroke-width: 1; filter: drop-shadow(0 1px 2px rgba(16, 24, 40, .06)); }
+.node-box.selected { stroke: var(--brand); stroke-width: 2; }
+.node-box.wait { stroke: var(--warn); stroke-width: 2; }
+.node-box.running { stroke: var(--brand); stroke-width: 2; }
+.node-box.failed { stroke: var(--bad); stroke-width: 2; }
+.node-box.done { stroke: color-mix(in srgb, var(--ok) 24%, var(--line)); }
+.node-box.human { stroke-dasharray: 5 4; }
+.node-box.selected { stroke: var(--brand); stroke-width: 2; }
+.node-title { font-size: 13px; font-weight: 650; fill: var(--text); letter-spacing: -.005em; }
+.node-meta { font-size: 10px; fill: var(--muted); }
+.node-detail-text { font-size: 9.5px; fill: var(--muted); }
+.node-status-label { font-size: 9px; fill: var(--muted); }
+.node-glyph { font-size: 11px; font-weight: 700; fill: #fff; }
+.node-count { font-size: 9px; fill: var(--muted); }
+.edge-label { font-size: 8.5px; font-weight: 550; fill: var(--muted); }
+.edge-pill { fill: var(--panel); stroke: var(--line); stroke-width: .6; }
+.run-card { min-width: 0; }
+.run-summary { padding: 10px 12px 0; display: grid; gap: 4px; font-size: 11px; color: var(--muted); }
+.run-summary strong { color: var(--text); font-weight: 600; }
+.run-actions { padding: 10px 12px; display: flex; gap: 7px; flex-wrap: wrap; }
+.waiting { border-top: 1px solid var(--line); padding: 10px 12px; }
+.waiting-title { display: flex; align-items: center; gap: 6px; color: var(--warn); font-size: 11px; font-weight: 600; margin-bottom: 6px; }
+.waiting-help { color: var(--muted); font-size: 10.5px; margin: 0 0 8px; }
+.decision { padding: 9px 0; border-top: 1px solid var(--line); }
+.decision:first-of-type { border-top: 0; padding-top: 0; }
+.decision-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.decision-meta { color: var(--muted); font-size: 10.5px; margin-bottom: 7px; }
+.decision-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.decision-actions .btn { padding: 4px 9px; font-size: 11px; }
+.decision-actions .btn.reject { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
+.muted-note { padding: 10px 12px; color: var(--muted); font-size: 11px; }
+.detail-card { margin-top: 14px; }
+.detail-card.hide { display: none; }
+.detail-body { padding: 12px; display: grid; grid-template-columns: minmax(240px, 360px) minmax(0, 1fr); gap: 14px; }
+.detail-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 10px; font-size: 11px; align-content: start; }
+.detail-kv dt { color: var(--muted); }
+.detail-kv dd { margin: 0; overflow-wrap: anywhere; }
+.detail-pre { margin: 0; max-height: 260px; overflow: auto; padding: 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); font: 10px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.start-card { margin-top: 14px; }
+.start-body { padding: 12px; display: grid; gap: 8px; }
+.help { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.help strong { color: var(--text); }
+textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); padding: 8px; font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.start-actions { display: flex; align-items: center; gap: 8px; }
+.empty { padding: 44px 18px; text-align: center; color: var(--muted); }
 .empty strong { display: block; margin-bottom: 5px; color: var(--text); font-size: 13px; }
-.toast { position: fixed; right: 16px; bottom: 16px; z-index: 10; max-width: 420px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); font-size: 11px; }
-.toast.error { color: var(--bad); }
-.toast.ok { color: var(--ok); }
-@media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } .side { order: -1; } }
+.toast { position: fixed; right: 18px; bottom: 18px; z-index: 30; max-width: 440px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); font-size: 11.5px; }
+.toast.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
+@media (max-width: 900px) {
+  .top-grid { grid-template-columns: minmax(0, 1fr); }
+  .graph { height: clamp(420px, 58vh, 620px); }
+  .detail-body { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  .top-inner { align-items: flex-start; }
+  .brand p { display: none; }
+  .top-actions { gap: 5px; }
+  .perm { display: none; }
+  .page { padding: 10px 10px 28px; }
+}
 </style>
 </head>
 <body>
 <header class="top">
-  <span class="mark">◇</span>
-  <div class="copy"><div class="name" id="name">工作流看板</div><div class="sub" id="sub">正在加载…</div></div>
-  <div class="top-right"><span class="status" id="status">未运行</span><button class="btn" data-action="refresh">刷新</button></div>
+  <div class="top-inner">
+    <div class="brand">
+      <span class="mark">⌘</span>
+      <div><h1 id="name">工作流看板</h1><p id="sub">正在加载…</p></div>
+    </div>
+    <div class="top-actions">
+      <span class="status" id="status">未运行</span>
+      <span class="perm" id="permCommand">命令</span>
+      <span class="perm" id="permHttp">HTTP</span>
+      <button class="btn" id="refresh" type="button">刷新</button>
+    </div>
+  </div>
 </header>
-<main class="wrap">
-  <section class="card">
-    <div class="card-head"><strong>节点图</strong><span class="hint" id="graph-hint"></span></div>
-    <div class="graph" id="graph"><div class="empty">正在加载…</div></div>
+
+<main class="page">
+  <div class="top-grid">
+    <section class="card graph-card">
+      <div class="card-head">
+        <strong>节点图</strong>
+        <span class="hint" id="graphHint"></span>
+        <span class="spacer"></span>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="graph" id="graph"><div class="empty">正在加载…</div></div>
+    </section>
+
+    <section class="card run-card">
+      <div class="card-head"><strong>运行</strong><span class="hint" id="runHint"></span></div>
+      <div class="run-summary" id="runSummary"></div>
+      <div class="run-actions">
+        <button class="btn primary" id="runBtn" type="button">继续运行</button>
+        <button class="btn" id="newBtn" type="button">新运行</button>
+      </div>
+      <div class="waiting" id="waiting"></div>
+    </section>
+  </div>
+
+  <section class="card detail-card hide" id="detailCard">
+    <div class="card-head">
+      <strong>节点详情</strong>
+      <span class="hint" id="detailHint"></span>
+      <span class="spacer"></span>
+      <button class="icon-btn" id="closeDetail" type="button" title="关闭节点详情" aria-label="关闭节点详情">×</button>
+    </div>
+    <div class="detail-body" id="detailBody"></div>
   </section>
-  <aside class="side">
-    <section class="card">
-      <div class="card-head"><strong>运行</strong><span class="hint" id="run-hint"></span></div>
-      <div class="btn-row"><button class="btn primary" data-action="run">继续运行</button><button class="btn" data-action="new">新运行</button></div>
-      <div class="side-body" id="waiting"></div>
-    </section>
-    <section class="card" id="detailCard">
-      <div class="card-head"><strong>节点详情</strong></div>
-      <div class="side-body node-detail" id="nodeDetail"></div>
-    </section>
-    <section class="card">
-      <div class="card-head"><strong>新运行输入</strong></div>
-      <div class="side-body"><textarea id="startInput" aria-label="初始输入 JSON">{}</textarea><button class="btn primary" data-action="start">启动</button></div>
-    </section>
-  </aside>
+
+  <section class="card start-card">
+    <div class="card-head"><strong>启动参数</strong><span class="hint">$input</span></div>
+    <div class="start-body">
+      <p class="help">这里只填工作流启动时的 <strong>$input</strong>。它不是人工节点的审批输入；人工节点会在上方“运行 → 等待决策”里直接选择结果。</p>
+      <textarea id="startInput" spellcheck="false">{}</textarea>
+      <div class="start-actions">
+        <button class="btn primary" id="startBtn" type="button">启动新运行</button>
+        <span class="help">不需要参数时保留 <code>{}</code> 即可。</span>
+      </div>
+    </div>
+  </section>
 </main>
-<div id="toast"></div>
+
+<div class="toast" id="toast" hidden></div>
+
 <script>
 (function () {
   "use strict";
+
   const PUBLIC = location.pathname.includes("/public/");
   const API = window.__BOARD_API_BASE__ || (PUBLIC ? "/plugins/dsh-agent-team-workflow/public/api" : "/plugins/dsh-agent-team-workflow/api");
   const SESSION = new URLSearchParams(location.search).get("session") || "";
   const BOARD_TOKEN = new URLSearchParams(location.search).get("token") || "";
-  function withToken(url) {
-    if (!BOARD_TOKEN) return url;
-    return url + (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(BOARD_TOKEN);
-  }
-  const $ = id => document.getElementById(id);
   const STATUS = { running: "运行中", waiting: "等待决策", done: "已完成", failed: "失败" };
   const TOKEN = { ready: "就绪", running: "执行中", waiting: "等待", completed: "已完成", failed: "失败" };
   const TYPE = { agent: "模型", command: "命令", http: "HTTP", human: "人工", fanout: "扇出", join: "聚合", subworkflow: "子流程" };
   const STYLE = {
-    agent: { color: "#4f7cff", glyph: "✦", fill: "rgba(79,124,255,.055)" },
-    command: { color: "#b06b12", glyph: ">_", fill: "rgba(176,107,18,.06)" },
-    http: { color: "#3b82f6", glyph: "⇄", fill: "rgba(59,130,246,.06)" },
-    human: { color: "#8b5cf6", glyph: "☑", fill: "rgba(139,92,246,.07)" },
-    fanout: { color: "#64748b", glyph: "Y", fill: "rgba(100,116,139,.06)" },
-    join: { color: "#0f766e", glyph: "⋈", fill: "rgba(15,118,110,.065)" },
-    subworkflow: { color: "#2f8a55", glyph: "▣", fill: "rgba(47,138,85,.06)" }
+    agent: { color: "#4f7cff", glyph: "✦" },
+    command: { color: "#b06b12", glyph: ">_" },
+    http: { color: "#3b82f6", glyph: "⇄" },
+    human: { color: "#8b5cf6", glyph: "☑" },
+    fanout: { color: "#64748b", glyph: "Y" },
+    join: { color: "#0f766e", glyph: "⋈" },
+    subworkflow: { color: "#2f8a55", glyph: "▣" }
   };
+
   let state = null;
   let selected = null;
   let graphSize = { width: 0, height: 0 };
+  let graphRendered = false;
   let busy = false;
   let toastTimer = null;
+
+  const $ = id => document.getElementById(id);
+  const withToken = url => BOARD_TOKEN ? url + (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(BOARD_TOKEN) : url;
 
   function esc(value) {
     return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   }
-  function toast(text, tone) {
-    const node = $("toast");
-    node.className = "toast " + (tone || "");
-    node.textContent = text;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { node.textContent = ""; }, 3200);
-  }
-  async function getJson(url) {
-    const response = await fetch(withToken(url), { cache: "no-store", headers: { accept: "application/json" } });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body?.error?.message || ("HTTP " + response.status));
-    return body;
-  }
-  async function postJson(url, body) {
-    const response = await fetch(withToken(url), { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload?.error?.message || ("HTTP " + response.status));
-    return payload;
-  }
-  async function load() {
-    if (!SESSION) return;
-    try {
-      state = await getJson(API + "/state?session=" + encodeURIComponent(SESSION));
-      render();
-    } catch (error) {
-      $("graph").innerHTML = '<div class="empty"><strong>载入失败</strong>' + esc(error.message) + "</div>";
+  function clip(value, max) {
+    const text = String(value ?? "");
+    const width = Array.from(text).reduce((sum, ch) => sum + (/[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 10.5 : 5.9), 0);
+    if (width <= max) return text;
+    let out = "";
+    let used = 0;
+    for (const ch of text) {
+      const step = /[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 10.5 : 5.9;
+      if (used + step > max - 8) break;
+      out += ch;
+      used += step;
     }
-  }
-  function latest(tokens) {
-    const map = new Map();
-    for (const token of tokens || []) map.set(token.nodeId, token);
-    return map;
-  }
-  function tone(status) {
-    if (status === "waiting") return "wait";
-    if (status === "failed") return "error";
-    if (status === "running" || status === "ready") return "active";
-    if (status === "completed") return "done";
-    return "";
-  }
-  function clip(text, max) {
-    let out = "", width = 0;
-    for (const ch of String(text || "")) {
-      const step = /[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 10.5 : 5.8;
-      if (width + step > max) return out + "…";
-      out += ch; width += step;
-    }
-    return out;
+    return out + "…";
   }
   function wrap(text, max) {
     const lines = [];
     let line = "", width = 0;
-    const stepOf = ch => /[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 10.5 : 6;
+    const stepOf = ch => /[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 12.2 : 6.9;
     const push = token => {
       const tokenWidth = Array.from(token).reduce((sum, ch) => sum + stepOf(ch), 0);
-      if (width + tokenWidth <= max) {
-        line += token;
-        width += tokenWidth;
-        return;
-      }
-      if (line.trim()) {
-        lines.push(line.trim());
-        line = "";
-        width = 0;
-      }
-      if (tokenWidth <= max) {
-        line = token;
-        width = tokenWidth;
-        return;
-      }
+      if (width + tokenWidth <= max) { line += token; width += tokenWidth; return; }
+      if (line.trim()) { lines.push(line.trim()); line = ""; width = 0; }
+      if (tokenWidth <= max) { line = token; width = tokenWidth; return; }
       for (const ch of token) {
         const step = stepOf(ch);
-        if (width + step > max && line) {
-          lines.push(line);
-          line = "";
-          width = 0;
-        }
+        if (width + step > max && line) { lines.push(line); line = ""; width = 0; }
         line += ch;
         width += step;
       }
@@ -239,11 +269,22 @@ pre { margin: 0; max-height: 240px; overflow: auto; padding: 7px; border: 1px so
     if (line.trim()) lines.push(line.trim());
     if (lines.length > 2) {
       lines.length = 2;
-      lines[1] = clip(lines[1], max - 10) + "…";
+      lines[1] = clip(lines[1], max - 8) + "…";
     }
     return lines.length ? lines : [""];
   }
-
+  function latest(tokens) {
+    const map = new Map();
+    for (const token of tokens || []) map.set(token.nodeId, token);
+    return map;
+  }
+  function tone(status) {
+    if (status === "running") return "running";
+    if (status === "waiting") return "wait";
+    if (status === "failed") return "failed";
+    if (status === "completed") return "done";
+    return "";
+  }
   function modelsOf(node) {
     if (Array.isArray(node.config?.models) && node.config.models.length) return node.config.models;
     const lane = (state.definition.providers || []).find(entry => entry.id === node.config?.lane);
@@ -255,173 +296,480 @@ pre { margin: 0; max-height: 240px; overflow: auto; padding: 7px; border: 1px so
     if (node.type !== "agent") return "";
     const models = modelsOf(node);
     if (models.length === 0) return "宿主默认";
-    return models.length > 1 ? models[0].model + " +" + (models.length - 1) : models[0].model;
+    const first = models[0];
+    return (first.model || first.provider || "") + (models.length > 1 ? " +" + (models.length - 1) : "");
   }
-  function layout(definition) {
-    const nodes = definition.nodes || [];
-    const edges = definition.edges || [];
-    const byId = new Map(nodes.map(node => [node.id, node]));
-    const rank = new Map();
-    const entry = definition.entry || nodes[0]?.id;
-    const visit = (id, depth, path) => {
-      if (path.has(id) || (rank.get(id) ?? -1) >= depth) return;
-      rank.set(id, depth);
-      const next = new Set(path); next.add(id);
-      for (const edge of edges) if (edge.from === id && byId.has(edge.to)) visit(edge.to, depth + 1, next);
-    };
-    if (entry && byId.has(entry)) visit(entry, 0, new Set());
-    let maxRank = 0;
-    for (const node of nodes) {
-      if (!rank.has(node.id)) rank.set(node.id, maxRank + 1);
-      maxRank = Math.max(maxRank, rank.get(node.id));
+  function detailText(node) {
+    if (node.type === "command") return node.config?.command || "";
+    if (node.type === "http") return [node.config?.method || "GET", node.config?.url || ""].join(" ");
+    if (node.type === "human") return Array.isArray(node.config?.outcomes) ? node.config.outcomes.join(" / ") : "人工决策";
+    if (node.type === "fanout") return node.config?.items || "";
+    if (node.type === "join") return node.config?.mode || "all";
+    if (node.type === "subworkflow") return "内联子流程";
+    return modelText(node);
+  }
+  function toast(text, bad) {
+    const node = $("toast");
+    node.textContent = text;
+    node.className = "toast" + (bad ? " bad" : "");
+    node.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { node.hidden = true; }, 3600);
+  }
+
+  async function getJson(url) {
+    const response = await fetch(withToken(url), { cache: "no-store", headers: { accept: "application/json" } });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body?.error?.message || ("HTTP " + response.status));
+    return body;
+  }
+  async function postJson(url, body) {
+    const response = await fetch(withToken(url), { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) });
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(value?.error?.message || ("HTTP " + response.status));
+    return value;
+  }
+  async function load() {
+    if (!SESSION) return;
+    try {
+      state = await getJson(API + "/state?session=" + encodeURIComponent(SESSION));
+      render();
+    } catch (error) {
+      $("graph").innerHTML = '<div class="empty"><strong>载入失败</strong>' + esc(error.message) + "</div>";
     }
+  }
+
+  /* ------------------------------------------------------------------ layout */
+
+  function longestRanks(definition) {
+    const nodes = definition.nodes;
+    const order = new Map(nodes.map((node, index) => [node.id, index]));
+    const incoming = new Map(nodes.map(node => [node.id, []]));
+    const outgoing = new Map(nodes.map(node => [node.id, []]));
+    for (const edge of definition.edges) {
+      if (!incoming.has(edge.to) || !outgoing.has(edge.from)) continue;
+      outgoing.get(edge.from).push(edge);
+    }
+    // Feedback edges must not become rank constraints, or an entry node with a
+    // reject/revision edge pointing back to it falls to the bottom of the graph.
+    const state = new Map();
+    const visitEdges = id => {
+      if (state.get(id) === 1 || state.get(id) === 2) return;
+      state.set(id, 1);
+      for (const edge of outgoing.get(id) || []) {
+        if (state.get(edge.to) === 1) continue;
+        const list = incoming.get(edge.to);
+        if (!list.includes(id)) list.push(id);
+        visitEdges(edge.to);
+      }
+      state.set(id, 2);
+    };
+    for (const node of nodes) visitEdges(node.id);
+    const rank = new Map();
+    const visiting = new Set();
+    const visit = id => {
+      if (rank.has(id)) return rank.get(id);
+      if (visiting.has(id)) return 0;
+      visiting.add(id);
+      let value = 0;
+      for (const from of incoming.get(id) || []) value = Math.max(value, visit(from) + 1);
+      visiting.delete(id);
+      rank.set(id, value);
+      return value;
+    };
+    for (const node of nodes) visit(node.id);
     const groups = new Map();
-    for (const node of nodes) {
-      const value = rank.get(node.id);
+    for (const node of [...nodes].sort((a, b) => order.get(a.id) - order.get(b.id))) {
+      const value = rank.get(node.id) || 0;
       if (!groups.has(value)) groups.set(value, []);
       groups.get(value).push(node);
     }
-    const w = 280, h = 80, gap = 18, rowH = 100, pad = 16;
-    const rowWidth = Math.max(0, ...Array.from(groups.values()).map(list => list.length * w + (list.length - 1) * gap));
-    const width = Math.max(620, rowWidth + 60);
-    const height = pad * 2 + (maxRank + 1) * rowH;
-    const pos = new Map();
-    for (const [value, list] of groups) {
-      const total = list.length * w + (list.length - 1) * gap;
-      let x = (width - total) / 2;
-      for (const node of list) {
-        pos.set(node.id, { x, y: pad + value * rowH, w, h });
-        x += w + gap;
+    return { rank, groups, incoming };
+  }
+
+  function orderRanks(groups, incoming) {
+    const keys = [...groups.keys()].sort((a, b) => a - b);
+    const position = new Map();
+    for (const key of keys) groups.get(key).forEach((node, index) => position.set(node.id, index));
+    const distance = (node, neighbors) => {
+      if (!neighbors.length) return position.get(node.id) || 0;
+      return neighbors.reduce((sum, id) => sum + (position.get(id) || 0), 0) / neighbors.length;
+    };
+    for (let pass = 0; pass < 4; pass += 1) {
+      for (const key of keys.slice(1)) {
+        const list = groups.get(key);
+        list.sort((a, b) => distance(a, incoming.get(a.id) || []) - distance(b, incoming.get(b.id) || []) || (position.get(a.id) || 0) - (position.get(b.id) || 0));
+        list.forEach((node, index) => position.set(node.id, index));
+      }
+      for (const key of [...keys].reverse().slice(1)) {
+        const list = groups.get(key);
+        const next = groups.get(key + 1) || [];
+        const score = node => distance(node, (incoming.get(node.id) || []).filter(id => next.some(item => item.id === id)));
+        list.sort((a, b) => score(a) - score(b) || (position.get(a.id) || 0) - (position.get(b.id) || 0));
+        list.forEach((node, index) => position.set(node.id, index));
       }
     }
-    const rects = nodes.map(node => ({ id: node.id, ...pos.get(node.id) }));
-    const hits = (points, fromId, toId) => {
-      for (let i = 0; i < points.length - 1; i += 1) {
-        const a = points[i], b = points[i + 1];
-        const minX = Math.min(a.x, b.x), maxX = Math.max(a.x, b.x), minY = Math.min(a.y, b.y), maxY = Math.max(a.y, b.y);
-        for (const rect of rects) {
-          if (rect.id === fromId || rect.id === toId) continue;
-          if (maxX >= rect.x - 4 && minX <= rect.x + rect.w + 4 && maxY >= rect.y - 4 && minY <= rect.y + rect.h + 4) return true;
+  }
+
+  function portOf(node, side, fraction) {
+    if (side === "bottom") return { x: node.x + node.w * fraction, y: node.y + node.h, nx: 0, ny: 1 };
+    if (side === "top") return { x: node.x + node.w * fraction, y: node.y, nx: 0, ny: -1 };
+    if (side === "right") return { x: node.x + node.w, y: node.y + node.h * fraction, nx: 1, ny: 0 };
+    return { x: node.x, y: node.y + node.h * fraction, nx: -1, ny: 0 };
+  }
+
+  class Heap {
+    constructor() { this.items = []; }
+    push(priority, value) {
+      const item = { priority, value };
+      this.items.push(item);
+      let index = this.items.length - 1;
+      while (index > 0) {
+        const parent = (index - 1) >> 1;
+        if (this.items[parent].priority <= item.priority) break;
+        this.items[index] = this.items[parent];
+        index = parent;
+      }
+      this.items[index] = item;
+    }
+    pop() {
+      if (!this.items.length) return undefined;
+      const top = this.items[0];
+      const last = this.items.pop();
+      if (this.items.length && last) {
+        let index = 0;
+        while (true) {
+          const left = index * 2 + 1;
+          const right = left + 1;
+          if (left >= this.items.length) break;
+          let child = left;
+          if (right < this.items.length && this.items[right].priority < this.items[left].priority) child = right;
+          if (this.items[child].priority >= last.priority) break;
+          this.items[index] = this.items[child];
+          index = child;
+        }
+        this.items[index] = last;
+      }
+      return top;
+    }
+    get size() { return this.items.length; }
+  }
+
+  function routeEdge(start, end, nodes, width, height, usage, step = 8) {
+    const cols = Math.max(1, Math.ceil(width / step));
+    const rows = Math.max(1, Math.ceil(height / step));
+    const blocked = new Uint8Array(cols * rows);
+    const margin = 9;
+    for (const node of nodes) {
+      const left = Math.floor((node.x - margin) / step);
+      const right = Math.ceil((node.x + node.w + margin) / step);
+      const top = Math.floor((node.y - margin) / step);
+      const bottom = Math.ceil((node.y + node.h + margin) / step);
+      for (let r = Math.max(0, top); r <= Math.min(rows - 1, bottom); r += 1) {
+        for (let c = Math.max(0, left); c <= Math.min(cols - 1, right); c += 1) {
+          const cx = c * step + step / 2;
+          const cy = r * step + step / 2;
+          if (cx > node.x - margin && cx < node.x + node.w + margin && cy > node.y - margin && cy < node.y + node.h + margin) {
+            blocked[r * cols + c] = 1;
+          }
         }
       }
-      return false;
-    };
-    const pathOf = points => points.map((p, i) => (i ? "L" : "M") + p.x + " " + p.y).join(" ");
-    const labelOf = points => {
-      let best = null;
-      for (let i = 0; i < points.length - 1; i += 1) {
-        const a = points[i], b = points[i + 1], length = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-        if (!best || length > best.length) best = { a, b, length };
-      }
-      if (!best) return { x: 0, y: 0 };
-      const mx = (best.a.x + best.b.x) / 2, my = (best.a.y + best.b.y) / 2;
-      return Math.abs(best.a.x - best.b.x) < 0.5 ? { x: mx + 14, y: my } : { x: mx, y: my - 10 };
-    };
-    const rendered = [];
-    for (const edge of edges) {
-      const from = pos.get(edge.from), to = pos.get(edge.to);
-      if (!from || !to) continue;
-      const back = (rank.get(edge.to) ?? 0) <= (rank.get(edge.from) ?? 0);
-      let points = null;
-      if (!back) {
-        const sx = from.x + from.w / 2, sy = from.y + from.h, tx = to.x + to.w / 2, ty = to.y, channel = (sy + ty) / 2;
-        const direct = [{ x: sx, y: sy }, { x: sx, y: channel }, { x: tx, y: channel }, { x: tx, y: ty }];
-        if (!hits(direct, edge.from, edge.to)) points = direct;
-      }
-      if (!points) {
-        const lane = x => [{ x: from.x + from.w, y: from.y + from.h / 2 }, { x, y: from.y + from.h / 2 }, { x, y: to.y + to.h / 2 }, { x: to.x + to.w, y: to.y + to.h / 2 }];
-        points = !hits(lane(width - 24), edge.from, edge.to) ? lane(width - 24) : lane(24);
-      }
-      const label = back
-        ? { x: from.x + from.w + 12, y: from.y + from.h / 2 - 10 }
-        : labelOf(points);
-      rendered.push({ d: pathOf(points), lx: Math.max(32, Math.min(width - 32, label.x)), ly: Math.max(12, Math.min(height - 10, label.y)), label: edge.on || "complete" });
     }
-    return { width, height, nodes: nodes.map(node => ({ ...node, ...pos.get(node.id) })), edges: rendered };
+    const cellAt = point => {
+      const c0 = Math.max(0, Math.min(cols - 1, Math.floor(point.x / step)));
+      const r0 = Math.max(0, Math.min(rows - 1, Math.floor(point.y / step)));
+      if (!blocked[r0 * cols + c0]) return { c: c0, r: r0 };
+      for (let radius = 1; radius < 20; radius += 1) {
+        for (let dr = -radius; dr <= radius; dr += 1) {
+          for (let dc = -radius; dc <= radius; dc += 1) {
+            if (Math.abs(dr) !== radius && Math.abs(dc) !== radius) continue;
+            const rr = r0 + dr, cc = c0 + dc;
+            if (rr >= 0 && rr < rows && cc >= 0 && cc < cols && !blocked[rr * cols + cc]) return { c: cc, r: rr };
+          }
+        }
+      }
+      return { c: c0, r: r0 };
+    };
+    const startCell = cellAt(start);
+    const endCell = cellAt(end);
+    blocked[startCell.r * cols + startCell.c] = 0;
+    blocked[endCell.r * cols + endCell.c] = 0;
+    const startIndex = startCell.r * cols + startCell.c;
+    const endIndex = endCell.r * cols + endCell.c;
+    const states = cols * rows * 5;
+    const best = new Float64Array(states).fill(Infinity);
+    const parent = new Int32Array(states).fill(-1);
+    const heap = new Heap();
+    const dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    best[startIndex * 5 + 4] = 0;
+    heap.push(0, { index: startIndex, dir: 4 });
+    let found = -1;
+    while (heap.size) {
+      const current = heap.pop();
+      if (!current) break;
+      const { index, dir } = current.value;
+      if (index === endIndex) { found = index * 5 + dir; break; }
+      const c = index % cols;
+      const r = (index - c) / cols;
+      for (let next = 0; next < 4; next += 1) {
+        const nc = c + dirs[next][0];
+        const nr = r + dirs[next][1];
+        if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
+        const nextIndex = nr * cols + nc;
+        if (blocked[nextIndex]) continue;
+        const turn = dir !== 4 && dir !== next ? 0.75 : 0;
+        const cost = 1 + turn + (usage[nextIndex] || 0) * 0.45;
+        const state = nextIndex * 5 + next;
+        const value = best[index * 5 + dir] + cost;
+        if (value >= best[state]) continue;
+        best[state] = value;
+        parent[state] = index * 5 + dir;
+        const h = Math.abs(nc - endCell.c) + Math.abs(nr - endCell.r);
+        heap.push(value + h, { index: nextIndex, dir: next });
+      }
+    }
+    if (found < 0) return null;
+    const cells = [];
+    let cursor = found;
+    while (cursor >= 0) {
+      const index = Math.floor(cursor / 5);
+      const c = index % cols;
+      const r = (index - c) / cols;
+      cells.push({ x: c * step + step / 2, y: r * step + step / 2, index });
+      cursor = parent[cursor];
+    }
+    cells.reverse();
+    for (const cell of cells) usage[cell.index] = (usage[cell.index] || 0) + 1;
+    const points = [start, ...cells, end];
+    const clean = [];
+    for (const point of points) {
+      const last = clean[clean.length - 1];
+      if (!last || Math.abs(last.x - point.x) > 2.2 || Math.abs(last.y - point.y) > 2.2) clean.push(point);
+    }
+    for (let index = clean.length - 2; index > 0; index -= 1) {
+      const a = clean[index - 1], b = clean[index], c = clean[index + 1];
+      if ((Math.abs(a.x - b.x) < 1.6 && Math.abs(b.x - c.x) < 1.6) || (Math.abs(a.y - b.y) < 1.6 && Math.abs(b.y - c.y) < 1.6)) clean.splice(index, 1);
+    }
+    return clean;
   }
-  function graphHtml() {
-    const graph = layout(state.definition);
+
+  function orthogonalize(points) {
+    const out = [];
+    const add = point => {
+      const last = out[out.length - 1];
+      if (!last || Math.abs(last.x - point.x) > 0.8 || Math.abs(last.y - point.y) > 0.8) out.push(point);
+    };
+    for (const point of points) {
+      const last = out[out.length - 1];
+      if (last && Math.abs(last.x - point.x) > 0.8 && Math.abs(last.y - point.y) > 0.8) {
+        if (Math.abs(point.x - last.x) >= Math.abs(point.y - last.y)) add({ x: point.x, y: last.y });
+        else add({ x: last.x, y: point.y });
+      }
+      add(point);
+    }
+    return out;
+  }
+
+  function roundedPath(points, radius = 7) {
+    points = orthogonalize(points);
+    if (!points.length) return "";
+    if (points.length === 1) return "M" + points[0].x + " " + points[0].y;
+    let d = "M" + points[0].x + " " + points[0].y;
+    for (let index = 1; index < points.length - 1; index += 1) {
+      const prev = points[index - 1], current = points[index], next = points[index + 1];
+      const inLength = Math.hypot(prev.x - current.x, prev.y - current.y);
+      const outLength = Math.hypot(next.x - current.x, next.y - current.y);
+      const r = Math.min(radius, inLength / 2, outLength / 2);
+      const before = { x: current.x + (prev.x - current.x) / (inLength || 1) * r, y: current.y + (prev.y - current.y) / (inLength || 1) * r };
+      const after = { x: current.x + (next.x - current.x) / (outLength || 1) * r, y: current.y + (next.y - current.y) / (outLength || 1) * r };
+      d += " L" + before.x + " " + before.y + " Q" + current.x + " " + current.y + " " + after.x + " " + after.y;
+    }
+    const last = points[points.length - 1];
+    return d + " L" + last.x + " " + last.y;
+  }
+
+  function layout(definition) {
+    const { rank, groups, incoming } = longestRanks(definition);
+    orderRanks(groups, incoming);
+    const nodeWidth = 440, nodeHeight = 100, gapY = 52, gapX = 24, sidePad = 82, topPad = 28;
+    const keys = [...groups.keys()].sort((a, b) => a - b);
+    const rowWidth = Math.max(nodeWidth, ...keys.map(key => groups.get(key).length * nodeWidth + (groups.get(key).length - 1) * gapX));
+    const width = rowWidth + sidePad * 2;
+    const height = topPad * 2 + keys.length * nodeHeight + Math.max(0, keys.length - 1) * gapY;
+    const nodes = definition.nodes.map(node => {
+      const value = rank.get(node.id) || 0;
+      const list = groups.get(value) || [];
+      const index = list.findIndex(item => item.id === node.id);
+      const total = list.length * nodeWidth + (list.length - 1) * gapX;
+      return { ...node, x: (width - total) / 2 + index * (nodeWidth + gapX), y: topPad + value * (nodeHeight + gapY), w: nodeWidth, h: nodeHeight };
+    });
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const sideGroups = new Map();
+    const edgeSides = definition.edges.map(edge => {
+      const from = byId.get(edge.from), to = byId.get(edge.to);
+      if (!from || !to) return null;
+      const fromRank = rank.get(edge.from) || 0;
+      const toRank = rank.get(edge.to) || 0;
+      let sourceSide = "bottom", targetSide = "top";
+      if (toRank < fromRank) { sourceSide = "right"; targetSide = "right"; }
+      else if (toRank === fromRank) { sourceSide = "right"; targetSide = "left"; }
+      const sourceKey = edge.from + ":" + sourceSide;
+      const targetKey = edge.to + ":" + targetSide;
+      if (!sideGroups.has(sourceKey)) sideGroups.set(sourceKey, []);
+      if (!sideGroups.has(targetKey)) sideGroups.set(targetKey, []);
+      sideGroups.get(sourceKey).push({ edge, end: "source" });
+      sideGroups.get(targetKey).push({ edge, end: "target" });
+      return { edge, sourceSide, targetSide };
+    }).filter(Boolean);
+    const fraction = (nodeId, side, edge, end) => {
+      const list = sideGroups.get(nodeId + ":" + side) || [];
+      const index = list.findIndex(item => item.edge === edge && item.end === end);
+      return (index + 1) / (list.length + 1);
+    };
+    const usage = new Uint16Array(Math.ceil(width / 8 + 1) * Math.ceil(height / 8 + 1));
+    const rendered = [];
+    for (const { edge, sourceSide, targetSide } of edgeSides) {
+      const from = byId.get(edge.from), to = byId.get(edge.to);
+      if (!from || !to) continue;
+      const back = (rank.get(edge.to) || 0) < (rank.get(edge.from) || 0);
+      const source = portOf(from, sourceSide, fraction(edge.from, sourceSide, edge, "source"));
+      const target = portOf(to, targetSide, fraction(edge.to, targetSide, edge, "target"));
+      const start = { x: source.x + source.nx * 13, y: source.y + source.ny * 13 };
+      const end = { x: target.x + target.nx * 13, y: target.y + target.ny * 13 };
+      const route = routeEdge(start, end, nodes, width, height, usage);
+      const points = route ? [{ x: source.x, y: source.y }, ...route, { x: target.x, y: target.y }] : [{ x: source.x, y: source.y }, { x: source.x, y: (source.y + target.y) / 2 }, { x: target.x, y: (source.y + target.y) / 2 }, { x: target.x, y: target.y }];
+      let label;
+      if (back) {
+        label = { x: Math.min(width - 34, source.x + 46), y: Math.max(16, source.y - 12) };
+      } else {
+        let best = null;
+        for (let index = 0; index < points.length - 1; index += 1) {
+          const a = points[index], b = points[index + 1];
+          const length = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+          if (!best || length > best.length) best = { a, b, length };
+        }
+        const horizontal = best ? Math.abs(best.a.y - best.b.y) < 0.6 : false;
+        label = best ? (horizontal
+          ? { x: (best.a.x + best.b.x) / 2, y: (best.a.y + best.b.y) / 2 + 12 }
+          : { x: (best.a.x + best.b.x) / 2 + 14, y: (best.a.y + best.b.y) / 2 }) : { x: 0, y: 0 };
+      }
+      rendered.push({ d: roundedPath(points), lx: Math.max(30, Math.min(width - 30, label.x)), ly: Math.max(14, Math.min(height - 14, label.y)), label: edge.on || "complete" });
+    }
+    return { width, height, nodes, edges: rendered };
+  }
+
+  /* ------------------------------------------------------------------ render */
+
+  function fitGraph() {
+    const element = $("graph");
+    const svg = element?.querySelector("svg");
+    if (!svg || !graphSize.width) return;
+    const scale = Math.max(0.55, Math.min(1, (element.clientWidth - 32) / graphSize.width));
+    svg.setAttribute("width", Math.round(graphSize.width * scale));
+    svg.setAttribute("height", Math.round(graphSize.height * scale));
+  }
+
+  function renderGraph() {
+    const definition = state.definition;
+    const graph = layout(definition);
     graphSize = { width: graph.width, height: graph.height };
     const tokens = state.run?.tokens || [];
     const byNode = latest(tokens);
     const counts = new Map();
     for (const token of tokens) counts.set(token.nodeId, (counts.get(token.nodeId) || 0) + 1);
     const parts = [];
-    parts.push('<svg viewBox="0 0 ' + graph.width + " " + graph.height + '" preserveAspectRatio="xMidYMin meet" role="img" aria-label="workflow graph">');
-    parts.push('<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#8a929e"/></marker></defs>');
+    parts.push('<svg viewBox="0 0 ' + graph.width + " " + graph.height + '" role="img" aria-label="工作流节点图">');
+    parts.push('<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#97a1ad"/></marker></defs>');
     for (const edge of graph.edges) {
-      parts.push('<path d="' + edge.d + '" fill="none" stroke="#8a929e" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>');
+      parts.push('<path d="' + edge.d + '" fill="none" stroke="#97a1ad" stroke-width="1.35" stroke-linejoin="round" marker-end="url(#arrow)"/>');
       if (edge.label !== "complete") {
-        const width = Math.max(18, edge.label.length * 4.8 + 8);
-        parts.push('<rect x="' + (edge.lx - width / 2) + '" y="' + (edge.ly - 6) + '" width="' + width + '" height="12" rx="6" class="edge-pill"/>');
+        const width = Math.max(22, edge.label.length * 5.2 + 10);
+        parts.push('<rect x="' + (edge.lx - width / 2) + '" y="' + (edge.ly - 7) + '" width="' + width + '" height="14" rx="7" class="edge-pill"/>');
         parts.push('<text x="' + edge.lx + '" y="' + (edge.ly + 3) + '" text-anchor="middle" class="edge-label">' + esc(edge.label) + "</text>");
       }
     }
     for (const node of graph.nodes) {
       const token = byNode.get(node.id);
       const status = tone(token?.status);
-      const style = STYLE[node.type] || { color: "#8a929e", glyph: "?", fill: "transparent" };
-      const lines = wrap(node.title || node.id, 190);
-      const typeY = node.y + 18 + lines.length * 12 + 3;
-      const dotColor = status === "error" ? "var(--bad)" : status === "wait" ? "var(--warn)" : status === "done" ? "var(--ok)" : status === "active" ? "var(--brand)" : "var(--line)";
-      parts.push('<g class="node" data-node="' + esc(node.id) + '" role="button" tabindex="0">');
-      parts.push('<rect class="node-box ' + status + '" x="' + node.x + '" y="' + node.y + '" width="' + node.w + '" height="' + node.h + '" rx="9" style="fill:' + style.fill + '"/>');
-      if (node.type === "subworkflow") parts.push('<rect x="' + (node.x + 2.5) + '" y="' + (node.y + 2.5) + '" width="' + (node.w - 5) + '" height="' + (node.h - 5) + '" rx="7" fill="none" stroke="' + style.color + '" stroke-width=".7" opacity=".65"/>');
-      parts.push('<rect x="' + (node.x + 9) + '" y="' + (node.y + 9) + '" width="18" height="18" rx="5" fill="' + style.color + '"/>');
-      parts.push('<text x="' + (node.x + 18) + '" y="' + (node.y + 22) + '" text-anchor="middle" class="node-glyph">' + esc(style.glyph) + "</text>");
-      parts.push('<text x="' + (node.x + 33) + '" y="' + (node.y + 18) + '" class="node-title">');
-      lines.forEach((line, index) => parts.push('<tspan x="' + (node.x + 33) + '" dy="' + (index ? 12 : 0) + '">' + esc(line) + "</tspan>"));
+      const style = STYLE[node.type] || { color: "#8a929e", glyph: "?" };
+      const titleLines = wrap(node.title || node.id, 366);
+      const metaY = node.y + (titleLines.length > 1 ? 58 : 48);
+      const detailY = metaY + 16;
+      const dotColor = status === "failed" ? "var(--bad)" : status === "wait" ? "var(--warn)" : status === "done" ? "var(--ok)" : status === "running" ? "var(--brand)" : "var(--line-strong)";
+      const statusLabel = token ? (TOKEN[token.status] || token.status) : "";
+      const classes = ["node-box", status, node.type === "human" ? "human" : "", selected === node.id ? "selected" : ""].filter(Boolean).join(" ");
+      parts.push('<g class="node" data-node="' + esc(node.id) + '" role="button" tabindex="0" aria-label="' + esc(node.title || node.id) + '">');
+      parts.push('<rect class="' + classes + '" x="' + node.x + '" y="' + node.y + '" width="' + node.w + '" height="' + node.h + '" rx="11"/>');
+      parts.push('<rect x="' + (node.x + 1) + '" y="' + (node.y + 14) + '" width="2.5" height="' + (node.h - 28) + '" rx="1.25" fill="' + style.color + '" opacity=".65"/>');
+      parts.push('<rect x="' + (node.x + 14) + '" y="' + (node.y + 14) + '" width="24" height="24" rx="7" fill="' + style.color + '"/>');
+      parts.push('<text x="' + (node.x + 26) + '" y="' + (node.y + 30) + '" text-anchor="middle" class="node-glyph">' + esc(style.glyph) + "</text>");
+      parts.push('<text x="' + (node.x + 48) + '" y="' + (node.y + 24) + '" class="node-title">');
+      titleLines.forEach((line, index) => parts.push('<tspan x="' + (node.x + 48) + '" dy="' + (index ? 16 : 0) + '">' + esc(line) + "</tspan>"));
       parts.push("</text>");
-      parts.push('<text x="' + (node.x + 33) + '" y="' + typeY + '" class="node-sub">' + esc(TYPE[node.type] || node.type) + (node.role ? " · " + esc(clip(node.role, 110)) : "") + "</text>");
-      if (node.type === "agent") parts.push('<text x="' + (node.x + 33) + '" y="' + (typeY + 15) + '" class="node-model">' + esc(clip(modelText(node), 140)) + "</text>");
+      const meta = (TYPE[node.type] || node.type) + (node.role ? " · " + node.role : "");
+      parts.push('<text x="' + (node.x + 48) + '" y="' + metaY + '" class="node-meta">' + esc(clip(meta, 340)) + "</text>");
+      parts.push('<text x="' + (node.x + 48) + '" y="' + detailY + '" class="node-detail-text">' + esc(clip(detailText(node), 370)) + "</text>");
+      parts.push('<circle cx="' + (node.x + 16) + '" cy="' + (node.y + node.h - 14) + '" r="3.2" fill="' + dotColor + '" stroke="var(--panel)" stroke-width="1.4"/>');
+      if (statusLabel) parts.push('<text x="' + (node.x + 24) + '" y="' + (node.y + node.h - 11) + '" class="node-status-label">' + esc(statusLabel) + "</text>");
       const count = counts.get(node.id) || 0;
-      if (count) parts.push('<circle cx="' + (node.x + node.w - 13) + '" cy="' + (node.y + 12) + '" r="8" fill="var(--panel-2)"/><text x="' + (node.x + node.w - 13) + '" y="' + (node.y + 15) + '" text-anchor="middle" class="node-sub">' + count + "</text>");
-      parts.push('<circle cx="' + (node.x + 12) + '" cy="' + (node.y + node.h - 10) + '" r="3" fill="' + dotColor + '" stroke="var(--panel)" stroke-width="1"/>');
+      if (count) {
+        parts.push('<circle cx="' + (node.x + node.w - 16) + '" cy="' + (node.y + 16) + '" r="9" fill="var(--panel-2)" stroke="var(--line)"/>');
+        parts.push('<text x="' + (node.x + node.w - 16) + '" y="' + (node.y + 19) + '" text-anchor="middle" class="node-count">' + count + "</text>");
+      }
       parts.push("</g>");
     }
     parts.push("</svg>");
-    return parts.join("");
+    const element = $("graph");
+    const scrollTop = element.scrollTop;
+    element.innerHTML = parts.join("");
+    fitGraph();
+    element.scrollTop = graphRendered ? scrollTop : 0;
+    graphRendered = true;
   }
-  function waitingHtml() {
-    const waiting = state.run?.waiting || [];
-    if (!waiting.length) return '<div class="kv"><dt>状态</dt><dd>' + esc(state.run ? (STATUS[state.run.status] || state.run.status) : "尚未运行") + "</dd></div>";
-    return '<div class="wait-title">待决策 · ' + waiting.length + "</div>" + waiting.map(token =>
-      '<div class="decision"><span title="' + esc(token.nodeId) + '">' + esc(token.title || token.nodeId) + "</span>" +
-      token.outcomes.map(outcome => '<button class="btn ' + (outcome === "reject" ? "danger" : "primary") + '" data-token="' + esc(token.tokenId) + '" data-outcome="' + esc(outcome) + '">' + esc(outcome) + "</button>").join("") +
-      "</div>"
-    ).join("");
+
+  function renderRun() {
+    const run = state.run;
+    $("runHint").textContent = run?.runId || "尚未运行";
+    const tokens = run?.tokens || [];
+    const completed = tokens.filter(token => token.status === "completed").length;
+    const waiting = run?.waiting || [];
+    $("runSummary").innerHTML = run
+      ? '<div><strong>' + esc(STATUS[run.status] || run.status) + '</strong> · ' + completed + ' / ' + tokens.length + ' 个节点完成</div>' +
+        '<div>等待人工：' + waiting.length + ' · 失败：' + tokens.filter(token => token.status === "failed").length + '</div>' +
+        (run.lastError ? '<div style="color:var(--bad)">' + esc(run.lastError) + '</div>' : '')
+      : '<div>还没有运行记录。在下方填写启动参数后点“启动新运行”。</div>';
+    $("runBtn").disabled = !run || run.status === "running" || busy;
+    $("waiting").innerHTML = waiting.length
+      ? '<div class="waiting-title">等待决策 · ' + waiting.length + '</div><p class="waiting-help">这些是人工节点。直接选择结果即可，不需要填写 JSON，也不需要到启动参数里输入。</p>' +
+        waiting.map(token => {
+          const node = state.definition.nodes.find(item => item.id === token.nodeId);
+          const outcomes = Array.isArray(token.outcomes) ? token.outcomes : (node?.config?.outcomes || []);
+          return '<div class="decision"><div class="decision-title">' + esc(token.title || node?.title || token.nodeId) + '</div>' +
+            '<div class="decision-meta">' + esc(token.nodeId) + ' · 人工节点</div>' +
+            '<div class="decision-actions">' + outcomes.map(outcome => '<button class="btn ' + (outcome === "reject" ? "reject" : "primary") + '" data-token="' + esc(token.tokenId) + '" data-outcome="' + esc(outcome) + '">' + esc(outcome) + "</button>").join("") + '</div></div>';
+        }).join("")
+      : '<div class="muted-note">没有等待中的人工节点。</div>';
   }
-  function detailHtml() {
+
+  function renderDetail() {
     const card = $("detailCard");
-    const box = $("nodeDetail");
-    if (!selected || !state.definition) {
-      card.classList.add("hide");
-      box.classList.remove("show");
-      box.innerHTML = "";
-      return;
-    }
+    if (!selected || !state.definition) { card.classList.add("hide"); return; }
     const node = state.definition.nodes.find(item => item.id === selected);
-    if (!node) {
-      card.classList.add("hide");
-      box.classList.remove("show");
-      box.innerHTML = "";
-      return;
-    }
+    if (!node) { card.classList.add("hide"); return; }
     const token = latest(state.run?.tokens || []).get(selected);
     card.classList.remove("hide");
-    box.classList.add("show");
-    box.innerHTML = '<dl class="kv"><dt>节点</dt><dd>' + esc(node.id) + '</dd><dt>类型</dt><dd>' + esc(TYPE[node.type] || node.type) + "</dd>" +
-      (token ? "<dt>状态</dt><dd>" + esc(TOKEN[token.status] || token.status) + "</dd>" : "") +
-      (token?.model ? "<dt>模型</dt><dd>" + esc([token.model.provider, token.model.model].filter(Boolean).join(" / ")) + "</dd>" : "") +
-      "</dl><pre>" + esc(JSON.stringify(token?.output ?? node.config ?? {}, null, 2)) + "</pre>";
-  }
-  function fitGraph() {
-    const element = $("graph");
-    const svg = element?.querySelector("svg");
-    if (!svg || !graphSize.width) return;
-    const scale = Math.max(0.6, Math.min(1.05, (element.clientWidth - 28) / graphSize.width, (element.clientHeight - 28) / graphSize.height));
-    svg.setAttribute("width", Math.round(graphSize.width * scale));
-    svg.setAttribute("height", Math.round(graphSize.height * scale));
+    $("detailHint").textContent = node.id;
+    $("detailBody").innerHTML =
+      '<dl class="detail-kv">' +
+        '<dt>节点</dt><dd>' + esc(node.id) + '</dd>' +
+        '<dt>标题</dt><dd>' + esc(node.title || node.id) + '</dd>' +
+        '<dt>类型</dt><dd>' + esc(TYPE[node.type] || node.type) + '</dd>' +
+        (node.role ? '<dt>角色</dt><dd>' + esc(node.role) + '</dd>' : '') +
+        (token ? '<dt>状态</dt><dd>' + esc(TOKEN[token.status] || token.status) + '</dd>' : '<dt>状态</dt><dd>未执行</dd>') +
+        (token?.model ? '<dt>模型</dt><dd>' + esc([token.model.provider, token.model.model].filter(Boolean).join(" / ")) + '</dd>' : '') +
+        (node.type === "human" ? '<dt>可选结果</dt><dd>' + esc((node.config?.outcomes || []).join(" / ") || "未配置") + '</dd>' : '') +
+      '</dl>' +
+      '<pre class="detail-pre">' + esc(JSON.stringify(token?.output ?? node.config ?? {}, null, 2)) + '</pre>';
   }
 
   function render() {
@@ -433,79 +781,116 @@ pre { margin: 0; max-height: 240px; overflow: auto; padding: 7px; border: 1px so
       return;
     }
     const definition = state.definition;
-    const run = state.run;
     $("name").textContent = definition.name;
     $("sub").textContent = definition.nodes.length + " 节点 · " + definition.edges.length + " 边";
     const status = $("status");
-    status.className = "status " + (run ? run.status : "");
-    status.textContent = run ? (STATUS[run.status] || run.status) : "未运行";
-    $("graph-hint").textContent = (run?.tokens?.length || 0) + " 次执行";
-    $("run-hint").textContent = run ? run.runId : "";
-    const graphElement = $("graph");
-    const scrollTop = graphElement.scrollTop;
-    $("graph").innerHTML = graphHtml();
-    fitGraph();
-    graphElement.scrollTop = scrollTop;
-    $("waiting").innerHTML = waitingHtml();
-    detailHtml();
+    status.className = "status " + (state.run ? state.run.status : "");
+    status.textContent = state.run ? (STATUS[state.run.status] || state.run.status) : "未运行";
+    $("graphHint").textContent = (state.run?.tokens?.length || 0) + " 次执行";
+    const command = state.permissions?.command;
+    const http = state.permissions?.http;
+    const commandText = command?.mode === "full" ? "完整" : command?.mode === "allowlist" ? "白名单" : "关闭";
+    const httpText = http?.mode === "full" ? "完整" : http?.mode === "allowlist" ? "白名单" : "关闭";
+    $("permCommand").textContent = "命令 " + commandText;
+    $("permCommand").className = "perm " + (command?.mode && command.mode !== "deny" ? "on" : "");
+    $("permHttp").textContent = "HTTP " + httpText;
+    $("permHttp").className = "perm " + (http?.mode && http.mode !== "deny" ? "on" : "");
+    $("legend").innerHTML = Object.entries(TYPE).map(([type, label]) => '<span><i style="background:' + STYLE[type].color + '"></i>' + label + "</span>").join("");
+    renderGraph();
+    renderRun();
+    renderDetail();
   }
+
   async function action(name) {
     if (busy || !state) return;
     if (name === "refresh") return load();
-    if (name === "new") { $("startInput").focus(); return; }
+    if (name === "new") {
+      $("startInput").scrollIntoView({ behavior: "smooth", block: "center" });
+      $("startInput").focus();
+      return;
+    }
     if (name === "run") {
       if (!state.run?.runId) return;
       busy = true;
-      try { state = await postJson(API + "/run", { session: SESSION, runId: state.run.runId }); render(); toast("已更新", "ok"); }
-      catch (error) { toast(error.message, "error"); }
-      finally { busy = false; }
-      return;
-    }
-    if (name === "start") {
-      let input;
-      try { input = JSON.parse($("startInput").value || "{}"); }
-      catch (error) { return toast("输入不是 JSON: " + error.message, "error"); }
-      if (!input || typeof input !== "object" || Array.isArray(input)) return toast("输入必须是 JSON 对象", "error");
-      busy = true;
+      $("runBtn").disabled = true;
       try {
-        state = await postJson(API + "/start", { session: SESSION, input });
-        if (state.run?.runId) state = await postJson(API + "/run", { session: SESSION, runId: state.run.runId });
-        render(); toast("已启动", "ok");
-      } catch (error) { toast(error.message, "error"); }
-      finally { busy = false; }
+        state = await postJson(API + "/run", { session: SESSION, runId: state.run.runId });
+        render();
+      } catch (error) {
+        toast(error.message, true);
+      } finally {
+        busy = false;
+        renderRun();
+      }
     }
   }
-  async function decide(token, outcome) {
-    if (busy || !state?.run?.runId) return;
+
+  async function start() {
+    if (busy || !state) return;
+    let input;
+    try { input = JSON.parse($("startInput").value || "{}"); } catch { toast("启动参数不是合法 JSON", true); return; }
+    if (input === null || typeof input !== "object" || Array.isArray(input)) { toast("启动参数必须是 JSON 对象", true); return; }
+    busy = true;
+    $("startBtn").disabled = true;
+    try {
+      state = await postJson(API + "/start", { session: SESSION, input });
+      selected = null;
+      render();
+      toast("已启动新运行");
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      busy = false;
+      $("startBtn").disabled = false;
+    }
+  }
+
+  async function decide(tokenId, outcome) {
+    if (busy || !state) return;
     busy = true;
     try {
-      state = await postJson(API + "/decide", { session: SESSION, runId: state.run.runId, tokenId: token, outcome });
-      state = await postJson(API + "/run", { session: SESSION, runId: state.run.runId });
-      render(); toast("已记录 " + outcome, "ok");
-    } catch (error) { toast(error.message, "error"); }
-    finally { busy = false; }
+      state = await postJson(API + "/decide", { session: SESSION, runId: state.run?.runId, tokenId, outcome });
+      render();
+      toast("已提交：" + outcome);
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      busy = false;
+    }
   }
-  document.addEventListener("click", event => {
-    const actionNode = event.target.closest("[data-action]");
-    if (actionNode) { action(actionNode.getAttribute("data-action")); return; }
-    const decision = event.target.closest("[data-token]");
-    if (decision) { decide(decision.getAttribute("data-token"), decision.getAttribute("data-outcome")); return; }
-    const node = event.target.closest("[data-node]");
-    if (node) { selected = node.getAttribute("data-node"); detailHtml(); }
+
+  $("refresh").addEventListener("click", () => action("refresh"));
+  $("runBtn").addEventListener("click", () => action("run"));
+  $("newBtn").addEventListener("click", () => action("new"));
+  $("startBtn").addEventListener("click", start);
+  $("closeDetail").addEventListener("click", () => { selected = null; renderDetail(); });
+  $("waiting").addEventListener("click", event => {
+    const button = event.target.closest("[data-token][data-outcome]");
+    if (button) decide(button.dataset.token, button.dataset.outcome);
   });
-  document.addEventListener("keydown", event => {
+  $("graph").addEventListener("click", event => {
+    const node = event.target.closest("[data-node]");
+    if (!node) return;
+    selected = node.getAttribute("data-node");
+    renderGraph();
+    renderDetail();
+    $("detailCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  $("graph").addEventListener("keydown", event => {
     if (event.key !== "Enter" && event.key !== " ") return;
     const node = event.target.closest("[data-node]");
     if (!node) return;
     event.preventDefault();
     selected = node.getAttribute("data-node");
-    detailHtml();
+    renderGraph();
+    renderDetail();
   });
+  window.addEventListener("resize", fitGraph);
+
   if (!SESSION) {
     $("graph").innerHTML = '<div class="empty"><strong>缺少 session 参数</strong>URL 需要 ?session=&lt;session-id&gt;。</div>';
   } else {
     load();
-    window.addEventListener("resize", fitGraph);
     setInterval(() => { if (!document.hidden && !busy) load(); }, 5000);
   }
 })();

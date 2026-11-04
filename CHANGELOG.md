@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0
+
+- Remove the right-sidebar workflow panel. The conversation header now has one
+  **工作流** action that opens the web board in the native Browser tab.
+- Rebuild the board: two-line word-aware cards with status and node metadata,
+  A* orthogonal edge routing around node rectangles, back-edge labels near their
+  source, node details below the graph, and a clear split between workflow
+  `$input` and human decision outcomes.
+- Remove the old web panel model editor; model fallback lists remain authored by
+  the session model.
+
 ## 1.8.1
 
 - Serve the board from a dedicated token-protected `127.0.0.1` loopback server on

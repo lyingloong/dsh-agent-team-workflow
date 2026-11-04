@@ -1,6 +1,6 @@
 # dsh-agent-team-workflow
 
-> A node-graph workflow runtime for DeepSeek Harness: agent, command, HTTP, human, fan-out/join and sub-workflow nodes, with artifacts, permissions and a live run panel.
+> A node-graph workflow runtime for DeepSeek Harness: agent, command, HTTP, human, fan-out/join and sub-workflow nodes, with artifacts, permissions and a live web board.
 
 `dsh-agent-team-workflow` is a DSH plugin. A workflow is a graph of typed nodes;
 edges choose the next node from an outcome. The runtime owns scheduling and
@@ -135,16 +135,16 @@ a restricted workflow (agent/human/fanout/join only) or use an allowlist.
 | `agent` | `role?`, `prompt?`, `lane?`, `provider?`, `model?`, `models?`, `cwd?`, `outcomes?`, `outcome?` | Spawns a DSH subagent. The child returns JSON `{outcome, output}`; plain text becomes `{text}`. |
 | `command` | `command`, `cwd?`, `timeoutMs?` | Runs a shell command in the session cwd. Exit 0 → `complete`; non-zero → `fail`. |
 | `http` | `url`, `method?`, `headers?`, `body?`, `timeoutMs?` | `fetch`; 2xx → `complete`, otherwise `fail`. |
-| `human` | `title?`, `outcomes?` | Waits for `team_workflow_decide` or the panel. Default outcomes: `approve`, `reject`. |
+| `human` | `title?`, `outcomes?` | Waits for `team_workflow_decide` or the web board. Default outcomes: `approve`, `reject`. |
 | `fanout` | `items`, `target`, `join` | Resolves `items` to an array and creates one branch token at `target`; each branch receives `$item` and `$index`. |
 | `join` | `mode: all\|any\|quorum`, `count?` | Aggregates branch outputs; `all` waits for every branch. |
 | `subworkflow` | `definition` | Runs an inline nested definition and exposes its context as the node output. |
 
 Agent nodes use the lane's `adapter/model/reasoningEffort/maxTokens` as subagent
 `agentOptions`. `model: "host-default"` inherits the host model. An explicit
-`provider`/`model` on the node overrides the lane and is what the panel writes
-when you pick a model. `cwd` is forwarded to the subagent as its starting
-directory; relative paths resolve against the session working directory.
+`provider`/`model` on the node overrides the lane and selects the executor;
+`cwd` is forwarded to the subagent as its starting directory; relative paths
+resolve against the session working directory.
 
 An agent node can instead carry an ordered `models` fallback list:
 
@@ -156,8 +156,9 @@ An agent node can instead carry an ordered `models` fallback list:
 ```
 
 The executor tries them in order on a subagent/provider error; a task `fail`
-outcome is not a provider error and is returned as the node outcome. The panel
-edits this list with add/remove/reorder controls.
+outcome is not a provider error and is returned as the node outcome. The board
+shows the ordered list; definitions are edited by the session model through the
+tools.
 
 A command exits 0 for `complete` and non-zero for `fail`. A `fail` outcome must
 have an outgoing `on: "fail"` edge; otherwise the run itself fails with
@@ -198,7 +199,7 @@ Start with `{"items": [1, 2, 3]}`. The fanout node creates three tokens at
 its output is the aggregated branch array.
 
 A join waits internally for its branches; that wait is not a human decision. The
-`waiting` list from `team_workflow_run`, `team_workflow_status`, the panel and the
+`waiting` list from `team_workflow_run`, `team_workflow_status`, the web board and the
 Web API contains only `human` node tokens, and `team_workflow_decide` rejects a
 join token with `not_decidable`.
 
@@ -227,7 +228,7 @@ user-decision flow:
 
 It requires a command grant for `npm` and `gh`, a configured `gh` login, and a
 session whose cwd is the target repository. The flow is serial: a `team_workflow_run`
-call executes it until the human node; the panel or another run call continues
+call executes it until the human node; the web board or another run call continues
 after the decision. `gh pr create` is intentionally one-shot in this example;
 re-running on a branch that already has a PR fails the `pr` node.
 
@@ -235,23 +236,27 @@ This is a single-seed flow. A persistent public seed pool and a pending-PR pool
 are not runtime primitives yet: each run starts from its input, and human
 decisions are per run. Use one run per seed until those queue primitives land.
 
-## Web panel
+## Web board
 
-The right-sidebar **工作流** tab is graph-first:
+The conversation header has one **工作流** action. It opens the standalone board
+in DSH's native Browser tab; the previous right-sidebar panel has been removed.
+
+The board is graph-first:
 
 - a compact header with workflow name, run status, node/edge count and
   permission state;
-- the node graph, which scales to the available pane size; each node type has
-  its own glyph, tint, border and type label; orthogonal edges route around
-  nodes, labels sit beside lines, and long titles wrap to two lines;
-- waiting human decisions with outcome buttons;
-- clicking a node opens a sheet with its latest token, output, errors and raw
-  config; agent nodes include an ordered model fallback list with add/remove/
-  reorder controls;
-- **运行详情** opens the token log and run context; **新运行** opens the input
-  composer; **继续运行** advances a waiting/running run.
+- a node graph with a word-aware two-line title, role/model or command/HTTP
+  detail, status dot and run count; node types keep their own glyph and accent;
+- orthogonal edges route with an A* grid around node rectangles, so they do not
+  pass through cards; outcome labels sit beside their lines;
+- clicking a node opens its detail card **below the graph**, with latest token,
+  output, errors and raw config;
+- the **运行** card shows run progress and waiting human decisions. Human nodes
+  are decided with outcome buttons only; no JSON input is needed there;
+- the **启动参数** card is explicitly the workflow's `$input`, not human input;
+  leave `{}` when the workflow needs no parameters.
 
-The panel deliberately stays an observer/light controller, not a workflow
+The board deliberately stays an observer/light controller, not a workflow
 builder: the session model authors definitions through the tools. It can only
 run a session whose Agent has been observed by a tool call; after a host restart,
 run once from the assistant or call a tool first.
@@ -259,8 +264,8 @@ run once from the assistant or call a tool first.
 ## Board URL and native Browser tab
 
 The board is served by a dedicated token-protected loopback HTTP server bound to
-`127.0.0.1` on an ephemeral port. The sidebar opens it through DSH's native
-Browser tab:
+`127.0.0.1` on an ephemeral port. The single **工作流** header action opens it
+through DSH's native Browser tab:
 
 ```js
 ctx.sidebarRight.openTab('browser', { params: { url } })
@@ -279,14 +284,12 @@ http://127.0.0.1:<board-port>/plugins/dsh-agent-team-workflow/public/board?sessi
 token-protected and has no DSH Connection fence; it is a second loopback port,
 not the Harness web server. Do not share the URL: the token grants board access.
 
-The page shows a full-height graph fitted to the available space, with wider
-cards, scroll preservation and a selected-only node detail card; it can start a
-run, continue a run and decide waiting humans (the latter uses the last Agent
-observed for the session). The side panel header has a `↗` action, and the
-conversation header has a `看板` action beside `工作流`; both open the native
-Browser tab, with an in-app overlay fallback if that tab type is unavailable.
+The page starts a run, continues a run and decides waiting humans (the latter
+uses the last Agent observed for the session). Node details open below the graph;
+the start-input card is only the workflow `$input`. If the native Browser tab is
+unavailable, the action falls back to navigating the current page to the board.
 
-![Standalone board preview](docs/board-preview.png)
+![Web board preview](docs/board-preview.png)
 
 ## Development
 
@@ -295,7 +298,7 @@ npm test                         # v2 tests in one process
 node --test "tests/*.test.mjs"   # standard runner
 ```
 
-Coverage: definition/runtime/store, DSH tools, panel web API and client bundle.
+Coverage: definition/runtime/store, DSH tools, web API and client bundle.
 No v1 tests or code remain; see [AGENTS.md](AGENTS.md).
 
 ## Security
@@ -304,8 +307,9 @@ No v1 tests or code remain; see [AGENTS.md](AGENTS.md).
   approved.
 - `command` runs in the session working directory with a timeout and a bounded
   output buffer. It is not a sandbox; a `full` grant is real host execution.
-- The panel API is same-origin and requires the DSH Connection authentication
-  fence. It only reads/writes the session data directory.
+- The private `/plugins/dsh-agent-team-workflow/api` routes are same-origin and
+  require the DSH Connection authentication fence. The board's own loopback
+  server is token-protected and only reads/writes the session data directory.
 - `subworkflow` inherits the parent's grant; it cannot widen permissions.
 
 ## License
