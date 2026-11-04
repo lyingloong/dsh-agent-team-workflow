@@ -9,6 +9,7 @@
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
 import { normalizeDefinition } from './definition.mjs';
 import { SessionStore } from './store.mjs';
 import { DEFAULT_PERMISSIONS, decide, newRunState, run } from './runtime.mjs';
@@ -50,11 +51,13 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
   };
   const route = (suffix, handler) => routes.set(`${ROUTE_PREFIX}${suffix}`, guard(handler));
   const routePublic = (suffix, handler) => publicRoutes.set(`${ROUTE_PREFIX}${suffix}`, guard(handler));
-  const publicOrigin = () => alternateOrigin(ctx.get?.('webServer')?.getOrigin?.() ?? '');
+  let boardBase = '';
+  let boardServer = null;
+  let resolveBoardReady;
+  const boardReady = new Promise(resolve => { resolveBoardReady = resolve; });
   const boardUrl = session => {
-    const origin = publicOrigin();
-    if (!origin || typeof session !== 'string' || !SESSION_PATTERN.test(session)) return null;
-    return `${origin}${ROUTE_PREFIX}/public/board?session=${encodeURIComponent(session)}&token=${encodeURIComponent(publicToken)}`;
+    if (!boardBase || typeof session !== 'string' || !SESSION_PATTERN.test(session)) return null;
+    return `${boardBase}${ROUTE_PREFIX}/public/board?session=${encodeURIComponent(session)}&token=${encodeURIComponent(publicToken)}`;
   };
   const authorizePublic = req => {
     const url = new URL(req.url ?? '/', 'http://local');
@@ -97,7 +100,8 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
 
   route('/api/board-url', async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://local');
-    sendJson(res, 200, { url: boardUrl(url.searchParams.get('session')) ?? '' });
+    const base = boardBase || await boardReady;
+    sendJson(res, 200, { url: base ? (boardUrl(url.searchParams.get('session')) ?? '') : '' });
   });
 
   route('/api/node-model', async (req, res) => {
@@ -279,6 +283,55 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
   });
 
   let attached = false;
+  const closeBoardServer = () => {
+    const server = boardServer;
+    boardServer = null;
+    boardBase = '';
+    resolveBoardReady(null);
+    if (server) server.close();
+  };
+  const startBoardServer = () => {
+    if (boardServer) return;
+    const server = createServer((req, res) => {
+      const pathname = new URL(req.url ?? '/', 'http://local').pathname;
+      const handler = publicRoutes.get(pathname);
+      if (!handler) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+        res.end('not found');
+        return;
+      }
+      Promise.resolve(handler(req, res)).catch(error => {
+        logger.warn?.(`dsh-agent-team-workflow: board server failed: ${error?.message ?? error}`);
+        if (!res.headersSent) {
+          res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+          res.end('board server error');
+        } else {
+          res.destroy?.();
+        }
+      });
+    });
+    server.on('error', error => {
+      logger.warn?.(`dsh-agent-team-workflow: board server unavailable: ${error?.message ?? error}`);
+      resolveBoardReady(null);
+    });
+    server.listen(Number(settings.boardPort ?? 0), '127.0.0.1', () => {
+      const address = server.address();
+      if (address && typeof address === 'object') {
+        boardBase = `http://127.0.0.1:${address.port}`;
+        resolveBoardReady(boardBase);
+      } else {
+        resolveBoardReady(null);
+      }
+    });
+    server.unref?.();
+    boardServer = server;
+  };
+  if (typeof ctx.effect === 'function') ctx.effect(() => {
+    startBoardServer();
+    return closeBoardServer;
+  }, 'dsh-agent-team-workflow: board server');
+  else startBoardServer();
+
   const connection = () => ctx.get?.('connection');
   const authenticated = handler => async (req, res) => {
     const gate = connection();
@@ -303,11 +356,6 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
       if (typeof ctx.effect === 'function') ctx.effect(register, `dsh-agent-team-workflow: ${routePath}`);
       else register();
     }
-    for (const [routePath, handler] of publicRoutes) {
-      const register = () => server.register({ kind: 'exact', path: routePath, handler });
-      if (typeof ctx.effect === 'function') ctx.effect(register, `dsh-agent-team-workflow: ${routePath}`);
-      else register();
-    }
     return true;
   };
   attach();
@@ -317,7 +365,7 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     });
   }
 
-  return { routes, publicRoutes, attach, boardUrl, publicToken };
+  return { routes, publicRoutes, attach, boardUrl, boardReady, closeBoardServer, publicToken };
 }
 
 async function readModelCatalog(ctx, definition) {
@@ -410,19 +458,6 @@ function updatedModelConfig(config, { models, provider, model }) {
     next.model = model;
   }
   return next;
-}
-
-function alternateOrigin(origin) {
-  try {
-    const url = new URL(origin);
-    if (url.hostname === '127.0.0.1') url.hostname = 'localhost';
-    else if (url.hostname === 'localhost') url.hostname = '127.0.0.1';
-    else if (url.hostname === '[::1]' || url.hostname === '::1' || url.hostname === '0.0.0.0') url.hostname = '127.0.0.1';
-    else return null;
-    return url.origin;
-  } catch {
-    return null;
-  }
 }
 
 function sendJson(res, status, value) {

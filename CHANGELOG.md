@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.1
+
+- Serve the board from a dedicated token-protected `127.0.0.1` loopback server on
+  an ephemeral port. The native Browser tab showed "page failed to load" when the
+  page came from the DSH web server/alternate hostname, while the system browser
+  worked; a separate origin avoids both origin refusal and framing middleware.
+- `team_workflow_status` and `/api/board-url` now return that dedicated URL.
+
 ## 1.8.0
 
 - Open the board through DSH's native sidebar Browser tab
