@@ -4,6 +4,7 @@
     "title": "Add a focused improvement",
     "status": "ready",
     "priority": 1,
+    "tags": ["maintenance", "low-risk-candidate"],
     "body": "Describe the requirement in one or two sentences.",
     "acceptance": [
       "The change is implemented and covered by the existing test suite."
@@ -14,6 +15,7 @@
     "title": "A lower-priority follow-up",
     "status": "ready",
     "priority": 5,
+    "tags": ["follow-up"],
     "body": "A second candidate seed; the analyst picks the highest priority ready item.",
     "acceptance": []
   }

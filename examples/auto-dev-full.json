@@ -1,17 +1,70 @@
 {
   "apiVersion": 2,
   "name": "auto-dev-full",
-  "description": "One complete development flow: the requirement analyst owns the seed pool, selects one requirement, then plan, implementation, tests, review, PR and merge gates run in sequence.",
-  "entry": "discover",
+  "description": "Two requirement sources with risk gates, implementation, review loop, PR, and a human/AI review pool. User requirements are highest priority and bypass requirement approval; mined requirements are risk-classified and mid/high risk need human approval.",
+  "entry": "intake",
   "nodes": [
     {
-      "id": "discover",
+      "id": "intake",
+      "type": "agent",
+      "title": "Intake requirement",
+      "role": "analyst",
+      "inputs": {
+        "source": "$input.source",
+        "requirement": "$input.requirement",
+        "tags": "$input.tags",
+        "priority": "$input.priority"
+      },
+      "config": {
+        "outcomes": ["user", "mined"],
+        "prompt": "Classify where this requirement came from and normalize it. If Input.requirement has text or Input.source is user, treat it as a user requirement: source=user, priority=0, preserve the user's tags (add inferred tags only as extra), and do not ask for requirement approval. Otherwise it is mined: source=mined; do not invent the requirement yet, the Requirement analyst will propose it. Do not edit files. Return JSON {source, requirement:{title,body,tags,priority,acceptance}, rationale} and the matching outcome user|mined."
+      }
+    },
+    {
+      "id": "analyst",
       "type": "agent",
       "title": "Requirement analyst",
       "role": "analyst",
-      "inputs": { "goal": "$input.goal", "poolPath": "$input.poolPath" },
+      "inputs": {
+        "goal": "$input.goal",
+        "poolPath": "$input.poolPath",
+        "feedback": "$nodes.requirement_review.output"
+      },
       "config": {
-        "prompt": "You own the requirement seed pool. Read the poolPath value from the Input JSON when present; otherwise try requirements/seeds.json, then docs/requirements*.json or REQUIREMENTS.md. The pool is JSON: [{id,title,status,priority,acceptance,body}]. Choose exactly one seed with status ready, highest priority first; if the pool is absent, propose exactly one small repository improvement from the current tree. Do not edit application code. You may update only the selected seed's status to claimed and record the run id; never edit the pool's other seeds. Return JSON {seedId,poolPath,title,body,acceptance,files,plan}. If nothing is ready, return {blocked:true,reason}."
+        "prompt": "You own the mined-requirement seed pool. Read poolPath from Input when present, otherwise requirements/seeds.json, docs/requirements*.json or REQUIREMENTS.md. The pool is JSON: [{id,title,status,priority,tags,acceptance,body}]. If feedback is present from a rejected human requirement review, revise the previously proposed mined requirement using that feedback. Choose exactly one seed with status ready, highest priority first; if no pool exists, propose one small repository improvement from the current tree. Do not edit application code. You may only update the selected seed's status to claimed and record the run id; never edit other seeds. Return JSON {seedId,poolPath,title,body,tags,acceptance,riskHints,plan}. If nothing is ready, return {blocked:true,reason}."
+      }
+    },
+    {
+      "id": "risk",
+      "type": "agent",
+      "title": "Assess requirement risk",
+      "role": "analyst",
+      "inputs": { "requirement": "$nodes.analyst.output" },
+      "config": {
+        "outcomes": ["low", "mid", "high"],
+        "prompt": "Classify the mined requirement's risk: low = isolated/docs-only/narrow change; mid = normal behavior change with tests; high = cross-cutting, security, data migration or uncertain scope. Return JSON {risk, tags, reasons, suggestedApproval} and the matching outcome low|mid|high. Do not edit files."
+      }
+    },
+    {
+      "id": "requirement_review",
+      "type": "human",
+      "title": "Approve mined requirement",
+      "config": { "outcomes": ["approve", "reject"] }
+    },
+    {
+      "id": "register",
+      "type": "agent",
+      "title": "Record requirement",
+      "role": "analyst",
+      "inputs": {
+        "intake": "$nodes.intake.output",
+        "mined": "$nodes.analyst.output",
+        "risk": "$nodes.risk.output",
+        "review": "$nodes.requirement_review.output",
+        "addToSeedPool": "$input.addToSeedPool"
+      },
+      "config": {
+        "prompt": "Record the selected requirement in requirements/requirements.json (create the file if missing). The list schema is [{id,title,body,tags,source,priority,risk,status,createdAt,runId}]. If Intake.source is user, use Intake.requirement, priority 0, risk=user, status=approved: user requirements need no requirement approval. Otherwise use the Requirement analyst output, risk from the risk assessment, status=approved after the gate. If Input.addToSeedPool is true and this is a user requirement, you may append related seed entries to requirements/seeds.json, but keep the requirements list authoritative. Do not edit application code. Return the normalized requirement record as JSON."
       }
     },
     {
@@ -19,16 +72,10 @@
       "type": "agent",
       "title": "Plan implementation",
       "role": "architect",
-      "inputs": { "requirement": "$nodes.discover.output" },
+      "inputs": { "requirement": "$nodes.register.output" },
       "config": {
-        "prompt": "Turn the requirement into a concrete implementation plan. Return JSON with steps, files, risks, and a test strategy. Do not edit files."
+        "prompt": "Turn the recorded requirement into a concrete implementation plan. Return JSON with steps, files, risks, and a test strategy. Do not edit files."
       }
-    },
-    {
-      "id": "seed_review",
-      "type": "human",
-      "title": "Approve requirement",
-      "config": { "outcomes": ["approve", "reject"] }
     },
     {
       "id": "branch",
@@ -45,13 +92,13 @@
       "title": "Implement",
       "role": "engineer",
       "inputs": {
-        "requirement": "$nodes.discover.output",
+        "requirement": "$nodes.register.output",
         "plan": "$nodes.plan.output",
         "review": "$nodes.review.output",
         "pr_review": "$nodes.pr_review.output"
       },
       "config": {
-        "prompt": "Implement the approved requirement in the current repository. Follow AGENTS.md. Do not commit, push or open a PR; command nodes handle that. Address review and PR feedback when present. Return JSON with summary and changed paths."
+        "prompt": "Implement the approved requirement in the current repository. Follow AGENTS.md. Do not commit, push or open a PR; command nodes handle that. Address Review feedback and PR/human review feedback, including the note field, when present. Return JSON with summary and changed paths."
       }
     },
     {
@@ -66,14 +113,14 @@
       "title": "Review",
       "role": "reviewer",
       "inputs": {
-        "requirement": "$nodes.discover.output",
+        "requirement": "$nodes.register.output",
         "plan": "$nodes.plan.output",
         "implementation": "$nodes.implement.output",
         "tests": "$nodes.verify.output"
       },
       "config": {
         "outcomes": ["pass", "needs_revision"],
-        "prompt": "Review the working tree against the requirement, plan and test result. Use pass only when no required change remains. Return JSON {\"outcome\":\"pass|needs_revision\",\"output\":...}."
+        "prompt": "Review the working tree against the requirement, plan and test result. Use pass only when no required change remains. Put concrete issues in output.issues. Return JSON {\"outcome\":\"pass|needs_revision\",\"output\":...}."
       }
     },
     {
@@ -88,7 +135,7 @@
     {
       "id": "pr_review",
       "type": "human",
-      "title": "Review pending PR",
+      "title": "Human review pool",
       "config": { "outcomes": ["approve", "reject"] }
     },
     {
@@ -102,10 +149,16 @@
     }
   ],
   "edges": [
-    { "from": "discover", "to": "plan", "on": "complete" },
-    { "from": "plan", "to": "seed_review", "on": "complete" },
-    { "from": "seed_review", "to": "branch", "on": "approve" },
-    { "from": "seed_review", "to": "discover", "on": "reject" },
+    { "from": "intake", "to": "register", "on": "user" },
+    { "from": "intake", "to": "analyst", "on": "mined" },
+    { "from": "analyst", "to": "risk", "on": "complete" },
+    { "from": "risk", "to": "register", "on": "low" },
+    { "from": "risk", "to": "requirement_review", "on": "mid" },
+    { "from": "risk", "to": "requirement_review", "on": "high" },
+    { "from": "requirement_review", "to": "register", "on": "approve" },
+    { "from": "requirement_review", "to": "analyst", "on": "reject" },
+    { "from": "register", "to": "plan", "on": "complete" },
+    { "from": "plan", "to": "branch", "on": "complete" },
     { "from": "branch", "to": "implement", "on": "complete" },
     { "from": "implement", "to": "verify", "on": "complete" },
     { "from": "verify", "to": "review", "on": "complete" },

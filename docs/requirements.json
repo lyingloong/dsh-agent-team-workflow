@@ -1,0 +1,22 @@
+[
+  {
+    "id": "req-user-1",
+    "title": "A requirement the user asked for",
+    "body": "The user's own requirement; it has the highest priority and bypasses requirement approval.",
+    "tags": ["user", "ui"],
+    "source": "user",
+    "priority": 0,
+    "risk": "user",
+    "status": "approved"
+  },
+  {
+    "id": "req-mined-1",
+    "title": "A requirement mined from the seed pool",
+    "body": "The requirement analyst proposed this from a repository seed.",
+    "tags": ["mined", "maintenance"],
+    "source": "mined",
+    "priority": 3,
+    "risk": "mid",
+    "status": "approved"
+  }
+]

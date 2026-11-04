@@ -106,6 +106,7 @@ button { cursor: pointer; }
 .decision:first-of-type { border-top: 0; padding-top: 0; }
 .decision-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
 .decision-meta { color: var(--muted); font-size: 10.5px; margin-bottom: 7px; }
+.decision-note { width: 100%; min-height: 54px; margin: 6px 0 8px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--text); padding: 6px 8px; font: 11px/1.5 -apple-system, "Segoe UI", "PingFang SC", sans-serif; }
 .decision-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .decision-actions .btn { padding: 4px 9px; font-size: 11px; }
 .decision-actions .btn.reject { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
@@ -650,13 +651,13 @@ button { cursor: pointer; }
       : '<div>还没有运行记录。工作流由助手启动；启动后这里显示状态和人工决策。</div>';
     $("runBtn").disabled = !run || run.status === "running" || busy;
     $("waiting").innerHTML = waiting.length
-      ? '<div class="waiting-title">等待决策 · ' + waiting.length + '</div><p class="waiting-help">这些是人工节点。直接选择结果即可，不需要填写 JSON。</p>' +
+      ? '<div class="waiting-title">等待决策 · ' + waiting.length + '</div><p class="waiting-help">这些是人工节点。直接选择结果；有问题可在留言框写下修改意见，留言会传给后续节点。</p>' +
         waiting.map(token => {
           const node = state.definition.nodes.find(item => item.id === token.nodeId);
           const outcomes = Array.isArray(token.outcomes) ? token.outcomes : (node?.config?.outcomes || []);
           return '<div class="decision"><div class="decision-title">' + esc(token.title || node?.title || token.nodeId) + '</div>' +
             '<div class="decision-meta">' + esc(token.nodeId) + ' · 人工节点</div>' +
-            '<div class="decision-actions">' + outcomes.map(outcome => '<button class="btn ' + (outcome === "reject" ? "reject" : "primary") + '" data-token="' + esc(token.tokenId) + '" data-outcome="' + esc(outcome) + '">' + esc(outcome) + "</button>").join("") + '</div></div>';
+            '<textarea class="decision-note" data-note="' + esc(token.tokenId) + '" placeholder="可选：审批留言/修改意见"></textarea><div class="decision-actions">' + outcomes.map(outcome => '<button class="btn ' + (outcome === "reject" ? "reject" : "primary") + '" data-token="' + esc(token.tokenId) + '" data-outcome="' + esc(outcome) + '">' + esc(outcome) + "</button>").join("") + '</div></div>';
         }).join("")
       : '<div class="muted-note">没有等待中的人工节点。</div>';
   }
@@ -732,9 +733,11 @@ button { cursor: pointer; }
 
   async function decide(tokenId, outcome) {
     if (busy || !state) return;
+    const field = [...document.querySelectorAll("[data-note]")].find(item => item.dataset.note === tokenId);
+    const note = field?.value.trim() ?? "";
     busy = true;
     try {
-      state = await postJson(API + "/decide", { session: SESSION, runId: state.run?.runId, tokenId, outcome });
+      state = await postJson(API + "/decide", { session: SESSION, runId: state.run?.runId, tokenId, outcome, output: note ? { note } : null });
       render();
       toast("已提交：" + outcome);
     } catch (error) {
