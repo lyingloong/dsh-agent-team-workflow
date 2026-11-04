@@ -95,35 +95,63 @@ button { cursor: pointer; }
 .node-count { font-size: 9px; fill: var(--muted); }
 .edge-label { font-size: 8.5px; font-weight: 550; fill: var(--muted); }
 .edge-pill { fill: var(--panel); stroke: var(--line); stroke-width: .6; }
+.right-rail { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .run-card { min-width: 0; }
 .run-summary { padding: 10px 12px 0; display: grid; gap: 4px; font-size: 11px; color: var(--muted); }
 .run-summary strong { color: var(--text); font-weight: 600; }
 .run-actions { padding: 10px 12px; display: flex; gap: 7px; flex-wrap: wrap; }
-.waiting { border-top: 1px solid var(--line); padding: 10px 12px; }
-.waiting-title { display: flex; align-items: center; gap: 6px; color: var(--warn); font-size: 11px; font-weight: 600; margin-bottom: 6px; }
-.waiting-help { color: var(--muted); font-size: 10.5px; margin: 0 0 8px; }
-.decision { padding: 9px 0; border-top: 1px solid var(--line); }
-.decision:first-of-type { border-top: 0; padding-top: 0; }
-.decision-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
-.decision-meta { color: var(--muted); font-size: 10.5px; margin-bottom: 7px; }
-.decision-note { width: 100%; min-height: 54px; margin: 6px 0 8px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--text); padding: 6px 8px; font: 11px/1.5 -apple-system, "Segoe UI", "PingFang SC", sans-serif; }
-.decision-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.decision-actions .btn { padding: 4px 9px; font-size: 11px; }
-.decision-actions .btn.reject { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
+.human-card { min-width: 0; }
+.human-todo { display: flex; flex-direction: column; }
+.human-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--panel)); font-size: 10px; }
+.human-item { padding: 11px 12px; border-top: 1px solid var(--line); }
+.human-item:first-child { border-top: 0; }
+.human-item-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.human-item-meta { color: var(--muted); font-size: 10.5px; margin-bottom: 7px; overflow-wrap: anywhere; }
+.human-item-note { width: 100%; min-height: 52px; margin: 0 0 8px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--text); padding: 6px 8px; font: 11px/1.5 -apple-system, "Segoe UI", "PingFang SC", sans-serif; }
+.human-item-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.human-item-actions .btn { padding: 4px 9px; font-size: 11px; }
+.human-item-actions .btn.reject { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
+.human-history { padding: 8px 12px 11px; border-top: 1px solid var(--line); }
+.human-history-title { color: var(--muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
+.human-history-item { display: flex; align-items: center; gap: 6px; padding: 3px 0; color: var(--muted); font-size: 10.5px; }
+.human-history-item strong { color: var(--text); font-weight: 550; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.human-history-item span { margin-left: auto; white-space: nowrap; }
+.human-empty { padding: 14px 12px; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .muted-note { padding: 10px 12px; color: var(--muted); font-size: 11px; }
 .detail-card { margin-top: 14px; }
 .detail-card.hide { display: none; }
-.detail-body { padding: 12px; display: grid; grid-template-columns: minmax(240px, 360px) minmax(0, 1fr); gap: 14px; }
+.detail-body { padding: 12px; display: grid; grid-template-columns: minmax(240px, 290px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.detail-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.detail-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .detail-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 10px; font-size: 11px; align-content: start; }
 .detail-kv dt { color: var(--muted); }
 .detail-kv dd { margin: 0; overflow-wrap: anywhere; }
-.detail-pre { margin: 0; max-height: 260px; overflow: auto; padding: 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); font: 10px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.detail-section { border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: var(--panel); }
+.detail-section-head { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 5px 9px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 10.5px; font-weight: 600; }
+.detail-section-head .spacer { flex: 1; }
+.detail-pre { margin: 0; max-height: 220px; overflow: auto; padding: 9px; background: var(--panel-2); font: 10px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.detail-error { border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
+.detail-error .detail-section-head { color: var(--bad); }
+.detail-links { display: flex; flex-direction: column; gap: 5px; }
+.detail-links-title { color: var(--muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.node-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); color: var(--text); font-size: 10.5px; text-align: left; }
+.node-chip:hover { border-color: var(--line-strong); background: var(--panel); }
+.node-chip .edge-on { color: var(--muted); font-size: 9.5px; }
+.detail-token-list { display: flex; flex-direction: column; max-height: 168px; overflow: auto; }
+.detail-token { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; padding: 5px 9px; border-top: 1px solid var(--line); font-size: 10.5px; }
+.detail-token:first-child { border-top: 0; }
+.detail-token .run-status { color: var(--muted); }
+.detail-token .run-outcome { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-token .run-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.detail-token.active { background: color-mix(in srgb, var(--brand) 6%, transparent); }
 .empty { padding: 44px 18px; text-align: center; color: var(--muted); }
 .empty strong { display: block; margin-bottom: 5px; color: var(--text); font-size: 13px; }
 .toast { position: fixed; right: 18px; bottom: 18px; z-index: 30; max-width: 440px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); font-size: 11.5px; }
 .toast.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .top-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
   .graph { height: clamp(420px, 58vh, 620px); }
   .detail-body { grid-template-columns: minmax(0, 1fr); }
 }
@@ -173,14 +201,20 @@ button { cursor: pointer; }
       </div>
     </section>
 
-    <section class="card run-card">
-      <div class="card-head"><strong>运行</strong><span class="hint" id="runHint"></span></div>
-      <div class="run-summary" id="runSummary"></div>
-      <div class="run-actions">
-        <button class="btn primary" id="runBtn" type="button">继续运行</button>
-      </div>
-      <div class="waiting" id="waiting"></div>
-    </section>
+    <div class="right-rail">
+      <section class="card run-card">
+        <div class="card-head"><strong>运行</strong><span class="hint" id="runHint"></span></div>
+        <div class="run-summary" id="runSummary"></div>
+        <div class="run-actions">
+          <button class="btn primary" id="runBtn" type="button">继续运行</button>
+        </div>
+      </section>
+
+      <section class="card human-card">
+        <div class="card-head"><strong>Human 待办</strong><span class="hint" id="humanHint"></span></div>
+        <div class="human-todo" id="humanTodo"></div>
+      </section>
+    </div>
   </div>
 
   <section class="card detail-card hide" id="detailCard">
@@ -638,6 +672,13 @@ button { cursor: pointer; }
     else applyView();
   }
 
+  function formatTime(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
   function renderRun() {
     const run = state.run;
     $("runHint").textContent = run?.runId || "尚未运行";
@@ -650,16 +691,37 @@ button { cursor: pointer; }
         (run.lastError ? '<div style="color:var(--bad)">' + esc(run.lastError) + '</div>' : '')
       : '<div>还没有运行记录。工作流由助手启动；启动后这里显示状态和人工决策。</div>';
     $("runBtn").disabled = !run || run.status === "running" || busy;
-    $("waiting").innerHTML = waiting.length
-      ? '<div class="waiting-title">等待决策 · ' + waiting.length + '</div><p class="waiting-help">这些是人工节点。直接选择结果；有问题可在留言框写下修改意见，留言会传给后续节点。</p>' +
-        waiting.map(token => {
-          const node = state.definition.nodes.find(item => item.id === token.nodeId);
-          const outcomes = Array.isArray(token.outcomes) ? token.outcomes : (node?.config?.outcomes || []);
-          return '<div class="decision"><div class="decision-title">' + esc(token.title || node?.title || token.nodeId) + '</div>' +
-            '<div class="decision-meta">' + esc(token.nodeId) + ' · 人工节点</div>' +
-            '<textarea class="decision-note" data-note="' + esc(token.tokenId) + '" placeholder="可选：审批留言/修改意见"></textarea><div class="decision-actions">' + outcomes.map(outcome => '<button class="btn ' + (outcome === "reject" ? "reject" : "primary") + '" data-token="' + esc(token.tokenId) + '" data-outcome="' + esc(outcome) + '">' + esc(outcome) + "</button>").join("") + '</div></div>';
-        }).join("")
-      : '<div class="muted-note">没有等待中的人工节点。</div>';
+    renderHuman();
+  }
+
+  function renderHuman() {
+    const run = state.run;
+    const waiting = run?.waiting || [];
+    const tokens = run?.tokens || [];
+    $("humanHint").innerHTML = waiting.length ? '<span class="human-count">' + waiting.length + "</span>" : "";
+    const items = waiting.map(item => {
+      const token = tokens.find(candidate => candidate.id === item.tokenId);
+      const node = state.definition.nodes.find(candidate => candidate.id === item.nodeId);
+      const outcomes = Array.isArray(item.outcomes) ? item.outcomes : (node?.config?.outcomes || []);
+      return '<div class="human-item"><div class="human-item-title">' + esc(item.title || node?.title || item.nodeId) + '</div>' +
+        '<div class="human-item-meta">' + esc(item.nodeId) + ' · 人工节点' + (token?.createdAt ? ' · ' + esc(formatTime(token.createdAt)) : '') + '</div>' +
+        '<textarea class="human-item-note" data-note="' + esc(item.tokenId) + '" placeholder="可选：审批留言/修改意见"></textarea>' +
+        '<div class="human-item-actions">' + outcomes.map(outcome =>
+          '<button class="btn ' + (outcome === "reject" ? "reject" : "primary") + '" data-token="' + esc(item.tokenId) + '" data-outcome="' + esc(outcome) + '">' + esc(outcome) + "</button>"
+        ).join("") + '</div></div>';
+    }).join("");
+    const humanNodes = new Set(state.definition.nodes.filter(node => node.type === "human").map(node => node.id));
+    const history = tokens
+      .filter(token => humanNodes.has(token.nodeId) && (token.status === "completed" || token.status === "failed"))
+      .slice(-6)
+      .reverse();
+    const historyHtml = history.length
+      ? '<div class="human-history"><div class="human-history-title">最近决策</div>' + history.map(token => {
+          const node = state.definition.nodes.find(candidate => candidate.id === token.nodeId);
+          return '<div class="human-history-item"><strong>' + esc(node?.title || token.nodeId) + '</strong><span>' + esc(token.outcome || TOKEN[token.status] || token.status) + (token.updatedAt ? ' · ' + esc(formatTime(token.updatedAt)) : '') + '</span></div>';
+        }).join("") + "</div>"
+      : "";
+    $("humanTodo").innerHTML = (items || '<div class="human-empty">当前没有待人工处理的事项。<br>工作流停在 human 节点时会出现在这里。</div>') + historyHtml;
   }
 
   function renderDetail() {
@@ -667,20 +729,52 @@ button { cursor: pointer; }
     if (!selected || !state.definition) { card.classList.add("hide"); return; }
     const node = state.definition.nodes.find(item => item.id === selected);
     if (!node) { card.classList.add("hide"); return; }
-    const token = latest(state.run?.tokens || []).get(selected);
+    const tokens = state.run?.tokens || [];
+    const history = tokens.filter(token => token.nodeId === selected);
+    const token = history[history.length - 1];
+    const definition = state.definition;
+    const incoming = definition.edges.filter(edge => edge.to === selected);
+    const outgoing = definition.edges.filter(edge => edge.from === selected);
+    const nodeContext = state.run?.context?.nodes?.[selected] ?? null;
+    const model = token?.model ? [token.model.provider, token.model.model].filter(Boolean).join(" / ") : "";
+    const status = token ? (TOKEN[token.status] || token.status) : "未执行";
+    const links = (edges, empty) => edges.length
+      ? edges.map(edge => '<button class="node-chip" type="button" data-select-node="' + esc(edge.from === selected ? edge.to : edge.from) + '"><span>' + esc(edge.from === selected ? edge.to : edge.from) + '</span><span class="edge-on">' + esc(edge.on || "complete") + "</span></button>").join("")
+      : '<span class="human-empty" style="padding:0">' + empty + "</span>";
+    const tokenRows = history.length
+      ? history.map((item, index) => '<div class="detail-token' + (item.id === token?.id ? " active" : "") + '"><span class="run-status">' + esc(TOKEN[item.status] || item.status) + '</span><span class="run-outcome">' + esc(item.outcome || item.error?.code || "—") + (item.attempt ? ' · #' + item.attempt : '') + '</span><span class="run-time">' + esc(formatTime(item.updatedAt || item.createdAt)) + "</span></div>").join("")
+      : '<div class="human-empty" style="padding:0">该节点还未执行。</div>';
+    const section = (title, value, className) => value === undefined || value === null
+      ? ""
+      : '<section class="detail-section ' + (className || "") + '"><div class="detail-section-head">' + title + '</div><pre class="detail-pre">' + esc(JSON.stringify(value, null, 2)) + "</pre></section>";
     card.classList.remove("hide");
-    $("detailHint").textContent = node.id;
+    $("detailHint").textContent = node.id + " · " + (TYPE[node.type] || node.type);
     $("detailBody").innerHTML =
-      '<dl class="detail-kv">' +
+      '<div class="detail-side"><dl class="detail-kv">' +
         '<dt>节点</dt><dd>' + esc(node.id) + '</dd>' +
         '<dt>标题</dt><dd>' + esc(node.title || node.id) + '</dd>' +
         '<dt>类型</dt><dd>' + esc(TYPE[node.type] || node.type) + '</dd>' +
         (node.role ? '<dt>角色</dt><dd>' + esc(node.role) + '</dd>' : '') +
-        (token ? '<dt>状态</dt><dd>' + esc(TOKEN[token.status] || token.status) + '</dd>' : '<dt>状态</dt><dd>未执行</dd>') +
-        (token?.model ? '<dt>模型</dt><dd>' + esc([token.model.provider, token.model.model].filter(Boolean).join(" / ")) + '</dd>' : '') +
-        (node.type === "human" ? '<dt>可选结果</dt><dd>' + esc((node.config?.outcomes || []).join(" / ") || "未配置") + '</dd>' : '') +
+        '<dt>状态</dt><dd>' + esc(status) + '</dd>' +
+        (token ? '<dt>尝试</dt><dd>#' + token.attempt + '</dd>' : '') +
+        (model ? '<dt>模型</dt><dd>' + esc(model) + '</dd>' : '') +
+        (token?.createdAt ? '<dt>开始</dt><dd>' + esc(token.createdAt) + '</dd>' : '') +
+        (token?.updatedAt ? '<dt>更新</dt><dd>' + esc(token.updatedAt) + '</dd>' : '') +
+        '<dt>执行次数</dt><dd>' + history.length + '</dd>' +
+        (node.type === "human" ? '<dt>可选结果</dt><dd>' + esc((node.config?.outcomes || ["approve", "reject"]).join(" / ")) + '</dd>' : '') +
+        (token?.branch ? '<dt>分支</dt><dd>#' + token.branch.index + '</dd>' : '') +
       '</dl>' +
-      '<pre class="detail-pre">' + esc(JSON.stringify(token?.output ?? node.config ?? {}, null, 2)) + '</pre>';
+      '<div class="detail-links"><div class="detail-links-title">上游</div>' + links(incoming, "无上游") + '</div>' +
+      '<div class="detail-links"><div class="detail-links-title">下游</div>' + links(outgoing, "无下游") + '</div>' +
+      '<section class="detail-section"><div class="detail-section-head">Token 历史<span class="spacer"></span>' + history.length + ' 条</div><div class="detail-token-list">' + tokenRows + '</div></section>' +
+      '</div>' +
+      '<div class="detail-main">' +
+        section("最近输出", token?.output ?? null) +
+        section("输入", token?.input ?? null) +
+        section("运行上下文", nodeContext) +
+        (token?.error ? section("错误", token.error, "detail-error") : "") +
+        section("节点配置", node.config ?? {}) +
+      '</div>';
   }
 
   function render() {
@@ -754,9 +848,17 @@ button { cursor: pointer; }
   $("fitAll").addEventListener("click", () => fitView("all"));
   $("fitOne").addEventListener("click", () => fitView("one"));
   $("closeDetail").addEventListener("click", () => { selected = null; renderDetail(); });
-  $("waiting").addEventListener("click", event => {
+  $("humanTodo").addEventListener("click", event => {
     const button = event.target.closest("[data-token][data-outcome]");
     if (button) decide(button.dataset.token, button.dataset.outcome);
+  });
+  $("detailBody").addEventListener("click", event => {
+    const link = event.target.closest("[data-select-node]");
+    if (!link) return;
+    selected = link.dataset.selectNode;
+    renderGraph();
+    renderDetail();
+    $("detailCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
 
   const graphElement = $("graph");

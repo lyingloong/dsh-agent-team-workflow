@@ -289,12 +289,15 @@ The board is graph-first:
   graph controls for fit/actual-size; layered channel routing keeps forward edges
   in the gaps between ranks and gives feedback edges their own side lanes, so
   edges do not cut through cards; outcome labels sit beside their lines;
-- clicking a node opens its detail card **below the graph**, with latest token,
-  output, errors and raw config;
-- the **运行** card shows run progress and waiting human decisions. Human nodes
-  are decided with outcome buttons only; no JSON input is needed there. The board
-  does not start or replace runs: the assistant starts one; the board observes it
-  and continues it after a decision.
+- clicking a node opens its detail card **below the graph**, with latest output,
+  token input, run context, node config, errors, token history, attempt/model
+  metadata and clickable upstream/downstream links;
+- the **运行** card shows progress and the continue action;
+- a separate **Human 待办** card lists every waiting human token with a count,
+  outcome buttons, a freeform note field and recent human decisions. Notes are
+  sent as the decision output and flow to the analyst or implementation node;
+- the board does not start or replace runs: the assistant starts one; the board
+  observes it and continues it after a decision.
 
 The board deliberately stays an observer/light controller, not a workflow
 builder: the session model authors definitions through the tools. It can only
