@@ -117,6 +117,17 @@ async function invoke(handler, { method = 'GET', url, body } = {}) {
   return { status: res.status, json: res.body === '' ? null : JSON.parse(res.body) };
 }
 
+async function invokeRaw(handler, { method = 'GET', url } = {}) {
+  const res = response();
+  const req = new EventEmitter();
+  req.method = method;
+  req.url = url;
+  req.destroy = () => {};
+  queueMicrotask(() => req.emit('end'));
+  await handler(req, res);
+  return { status: res.status, headers: res.headers, body: res.body };
+}
+
 test('v2 web API supports state, start, decide and run', async (t) => {
   const { routes, store } = setup(t);
   assert.deepEqual([...routes.keys()].sort(), [
@@ -126,6 +137,7 @@ test('v2 web API supports state, start, decide and run', async (t) => {
     '/plugins/dsh-agent-team-workflow/api/run',
     '/plugins/dsh-agent-team-workflow/api/start',
     '/plugins/dsh-agent-team-workflow/api/state',
+    '/plugins/dsh-agent-team-workflow/board',
   ]);
   await store.saveDefinition({ definition: FLOW, permissions: { command: { mode: 'full', allow: [] } } });
 
@@ -261,4 +273,15 @@ test('web API panel state excludes internal join waits', async (t) => {
   });
   assert.equal(rejected.status, 400);
   assert.equal(rejected.json.error.code, 'not_decidable');
+});
+
+test('board URL serves the standalone HTML board', async (t) => {
+  const { routes } = setup(t);
+  const board = await invokeRaw(routes.get('/plugins/dsh-agent-team-workflow/board'), {
+    url: `/plugins/dsh-agent-team-workflow/board?session=${SESSION}`,
+  });
+  assert.equal(board.status, 200);
+  assert.match(board.headers['content-type'], /^text\/html/);
+  assert.match(board.body, /工作流看板/);
+  assert.match(board.body, /\/state\?session=/);
 });

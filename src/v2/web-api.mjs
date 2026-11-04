@@ -7,6 +7,7 @@
  */
 
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { normalizeDefinition } from './definition.mjs';
 import { SessionStore } from './store.mjs';
 import { DEFAULT_PERMISSIONS, decide, newRunState, run } from './runtime.mjs';
@@ -16,6 +17,7 @@ import { createExecutors } from './executors.mjs';
 export const ROUTE_PREFIX = '/plugins/dsh-agent-team-workflow';
 const MAX_BODY_BYTES = 64 * 1024;
 const SESSION_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
+const BOARD_HTML = readFileSync(new URL('./board.html', import.meta.url), 'utf8');
 
 export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = console }) {
   const root = path.resolve(dataRoot);
@@ -49,6 +51,17 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     if (typeof runId === 'string' && runId !== '') return store.loadRun(runId);
     return store.latestRun();
   };
+
+  route('/board', async (req, res) => {
+    const url = new URL(req.url ?? '/', 'http://local');
+    storeFor(url.searchParams.get('session'));
+    res.writeHead(200, {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    });
+    res.end(BOARD_HTML);
+  });
 
   route('/api/state', async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://local');

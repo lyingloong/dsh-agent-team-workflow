@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工作流看板</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #f1f3f6;
+  --line: #dfe3e8;
+  --text: #1c2128;
+  --muted: #6b7480;
+  --brand: #4f7cff;
+  --warn: #b06b12;
+  --ok: #2f8a55;
+  --bad: #c53b3b;
+  --radius: 12px;
+  --shadow: 0 8px 28px rgba(20, 30, 50, .08);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161c;
+    --panel: #1a2028;
+    --panel-2: #232b35;
+    --line: #303b48;
+    --text: #e8edf4;
+    --muted: #93a0b2;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .3);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 13px/1.45 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+button, textarea { font: inherit; }
+.top { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(12px); }
+.mark { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); font-weight: 700; }
+.copy { min-width: 0; }
+.name { font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub { color: var(--muted); font-size: 11px; }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.status { padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+.status.running { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 40%, transparent); }
+.status.waiting { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.status.done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.status.failed { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.card-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.card-head strong { font-size: 12px; }
+.card-head .hint { margin-left: auto; color: var(--muted); font-size: 10px; }
+.graph { overflow: auto; padding: 8px; background-image: radial-gradient(circle, color-mix(in srgb, var(--line) 55%, transparent) .7px, transparent .8px); background-size: 16px 16px; }
+.graph svg { display: block; width: 100%; height: auto; min-height: 220px; }
+.node { cursor: pointer; }
+.node:hover .node-box { stroke-width: 1.4; filter: drop-shadow(0 2px 5px rgba(0,0,0,.16)); }
+.node-box { fill: var(--panel); stroke: var(--line); stroke-width: .9; filter: drop-shadow(0 1px 2px rgba(0,0,0,.08)); }
+.node-box.active { stroke: var(--brand); }
+.node-box.wait { stroke: var(--warn); }
+.node-box.done { stroke: var(--ok); }
+.node-box.error { stroke: var(--bad); }
+.node-title { font-size: 10.5px; font-weight: 600; fill: var(--text); }
+.node-sub { font-size: 8.5px; fill: var(--muted); }
+.node-model { font-size: 8.5px; fill: var(--muted); }
+.node-glyph { font-size: 9px; font-weight: 700; fill: #fff; }
+.edge-label { font-size: 9px; font-weight: 500; fill: var(--muted); }
+.edge-pill { fill: var(--panel); stroke: var(--line); stroke-width: .5; }
+.waiting { padding: 10px 12px; }
+.wait-title { color: var(--warn); font-size: 11px; font-weight: 600; margin-bottom: 7px; }
+.decision { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
+.decision span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--text); padding: 4px 9px; cursor: pointer; font-size: 11px; white-space: nowrap; }
+.btn:hover { background: var(--panel-2); }
+.btn.primary { background: var(--brand); border-color: transparent; color: #fff; }
+.btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
+.btn[disabled] { opacity: .45; cursor: default; }
+.side { display: flex; flex-direction: column; gap: 14px; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
+.side-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+textarea { width: 100%; min-height: 86px; resize: vertical; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); padding: 7px; font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 8px; font-size: 11px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+pre { margin: 0; max-height: 240px; overflow: auto; padding: 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.node-detail { display: none; }
+.node-detail.show { display: block; }
+.empty { padding: 32px 18px; text-align: center; color: var(--muted); }
+.empty strong { display: block; margin-bottom: 5px; color: var(--text); font-size: 13px; }
+.toast { position: fixed; right: 16px; bottom: 16px; z-index: 10; max-width: 420px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); font-size: 11px; }
+.toast.error { color: var(--bad); }
+.toast.ok { color: var(--ok); }
+@media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } .side { order: -1; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="mark">◇</span>
+  <div class="copy"><div class="name" id="name">工作流看板</div><div class="sub" id="sub">正在加载…</div></div>
+  <div class="top-right"><span class="status" id="status">未运行</span><button class="btn" data-action="refresh">刷新</button></div>
+</header>
+<main class="wrap">
+  <section class="card">
+    <div class="card-head"><strong>节点图</strong><span class="hint" id="graph-hint"></span></div>
+    <div class="graph" id="graph"><div class="empty">正在加载…</div></div>
+  </section>
+  <aside class="side">
+    <section class="card">
+      <div class="card-head"><strong>运行</strong><span class="hint" id="run-hint"></span></div>
+      <div class="btn-row"><button class="btn primary" data-action="run">继续运行</button><button class="btn" data-action="new">新运行</button></div>
+      <div class="side-body" id="waiting"></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><strong>节点详情</strong></div>
+      <div class="side-body node-detail" id="nodeDetail"></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><strong>新运行输入</strong></div>
+      <div class="side-body"><textarea id="startInput" aria-label="初始输入 JSON">{}</textarea><button class="btn primary" data-action="start">启动</button></div>
+    </section>
+  </aside>
+</main>
+<div id="toast"></div>
+<script>
+(function () {
+  "use strict";
+  const API = "/plugins/dsh-agent-team-workflow/api";
+  const SESSION = new URLSearchParams(location.search).get("session") || "";
+  const $ = id => document.getElementById(id);
+  const STATUS = { running: "运行中", waiting: "等待决策", done: "已完成", failed: "失败" };
+  const TOKEN = { ready: "就绪", running: "执行中", waiting: "等待", completed: "已完成", failed: "失败" };
+  const TYPE = { agent: "模型", command: "命令", http: "HTTP", human: "人工", fanout: "扇出", join: "聚合", subworkflow: "子流程" };
+  const STYLE = {
+    agent: { color: "#4f7cff", glyph: "✦", fill: "rgba(79,124,255,.055)" },
+    command: { color: "#b06b12", glyph: ">_", fill: "rgba(176,107,18,.06)" },
+    http: { color: "#3b82f6", glyph: "⇄", fill: "rgba(59,130,246,.06)" },
+    human: { color: "#8b5cf6", glyph: "☑", fill: "rgba(139,92,246,.07)" },
+    fanout: { color: "#64748b", glyph: "Y", fill: "rgba(100,116,139,.06)" },
+    join: { color: "#0f766e", glyph: "⋈", fill: "rgba(15,118,110,.065)" },
+    subworkflow: { color: "#2f8a55", glyph: "▣", fill: "rgba(47,138,85,.06)" }
+  };
+  let state = null;
+  let selected = null;
+  let busy = false;
+  let toastTimer = null;
+
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  }
+  function toast(text, tone) {
+    const node = $("toast");
+    node.className = "toast " + (tone || "");
+    node.textContent = text;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { node.textContent = ""; }, 3200);
+  }
+  async function getJson(url) {
+    const response = await fetch(url, { cache: "no-store", headers: { accept: "application/json" } });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body?.error?.message || ("HTTP " + response.status));
+    return body;
+  }
+  async function postJson(url, body) {
+    const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error?.message || ("HTTP " + response.status));
+    return payload;
+  }
+  async function load() {
+    if (!SESSION) return;
+    try {
+      state = await getJson(API + "/state?session=" + encodeURIComponent(SESSION));
+      render();
+    } catch (error) {
+      $("graph").innerHTML = '<div class="empty"><strong>载入失败</strong>' + esc(error.message) + "</div>";
+    }
+  }
+  function latest(tokens) {
+    const map = new Map();
+    for (const token of tokens || []) map.set(token.nodeId, token);
+    return map;
+  }
+  function tone(status) {
+    if (status === "waiting") return "wait";
+    if (status === "failed") return "error";
+    if (status === "running" || status === "ready") return "active";
+    if (status === "completed") return "done";
+    return "";
+  }
+  function clip(text, max) {
+    let out = "", width = 0;
+    for (const ch of String(text || "")) {
+      const step = /[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 10.5 : 5.8;
+      if (width + step > max) return out + "…";
+      out += ch; width += step;
+    }
+    return out;
+  }
+  function wrap(text, max) {
+    const lines = [];
+    let line = "", width = 0;
+    for (const ch of String(text || "")) {
+      const step = /[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 10.5 : 6;
+      if (width + step > max && line) { lines.push(line); line = ""; width = 0; }
+      line += ch; width += step;
+    }
+    if (line) lines.push(line);
+    return lines.slice(0, 2);
+  }
+  function modelsOf(node) {
+    if (Array.isArray(node.config?.models) && node.config.models.length) return node.config.models;
+    const lane = (state.definition.providers || []).find(entry => entry.id === node.config?.lane);
+    const provider = node.config?.provider || lane?.adapter;
+    const model = node.config?.model || lane?.model;
+    return provider && model && model !== "host-default" ? [{ provider, model }] : [];
+  }
+  function modelText(node) {
+    if (node.type !== "agent") return "";
+    const models = modelsOf(node);
+    if (models.length === 0) return "宿主默认";
+    return models.length > 1 ? models[0].model + " +" + (models.length - 1) : models[0].model;
+  }
+  function layout(definition) {
+    const nodes = definition.nodes || [];
+    const edges = definition.edges || [];
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const rank = new Map();
+    const entry = definition.entry || nodes[0]?.id;
+    const visit = (id, depth, path) => {
+      if (path.has(id) || (rank.get(id) ?? -1) >= depth) return;
+      rank.set(id, depth);
+      const next = new Set(path); next.add(id);
+      for (const edge of edges) if (edge.from === id && byId.has(edge.to)) visit(edge.to, depth + 1, next);
+    };
+    if (entry && byId.has(entry)) visit(entry, 0, new Set());
+    let maxRank = 0;
+    for (const node of nodes) {
+      if (!rank.has(node.id)) rank.set(node.id, maxRank + 1);
+      maxRank = Math.max(maxRank, rank.get(node.id));
+    }
+    const groups = new Map();
+    for (const node of nodes) {
+      const value = rank.get(node.id);
+      if (!groups.has(value)) groups.set(value, []);
+      groups.get(value).push(node);
+    }
+    const w = 150, h = 76, gap = 16, rowH = 100, pad = 14;
+    const rowWidth = Math.max(0, ...Array.from(groups.values()).map(list => list.length * w + (list.length - 1) * gap));
+    const width = Math.max(380, rowWidth + 104);
+    const height = pad * 2 + (maxRank + 1) * rowH;
+    const pos = new Map();
+    for (const [value, list] of groups) {
+      const total = list.length * w + (list.length - 1) * gap;
+      let x = (width - total) / 2;
+      for (const node of list) {
+        pos.set(node.id, { x, y: pad + value * rowH, w, h });
+        x += w + gap;
+      }
+    }
+    const rects = nodes.map(node => ({ id: node.id, ...pos.get(node.id) }));
+    const hits = (points, fromId, toId) => {
+      for (let i = 0; i < points.length - 1; i += 1) {
+        const a = points[i], b = points[i + 1];
+        const minX = Math.min(a.x, b.x), maxX = Math.max(a.x, b.x), minY = Math.min(a.y, b.y), maxY = Math.max(a.y, b.y);
+        for (const rect of rects) {
+          if (rect.id === fromId || rect.id === toId) continue;
+          if (maxX >= rect.x - 4 && minX <= rect.x + rect.w + 4 && maxY >= rect.y - 4 && minY <= rect.y + rect.h + 4) return true;
+        }
+      }
+      return false;
+    };
+    const pathOf = points => points.map((p, i) => (i ? "L" : "M") + p.x + " " + p.y).join(" ");
+    const labelOf = points => {
+      let best = null;
+      for (let i = 0; i < points.length - 1; i += 1) {
+        const a = points[i], b = points[i + 1], length = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+        if (!best || length > best.length) best = { a, b, length };
+      }
+      if (!best) return { x: 0, y: 0 };
+      const mx = (best.a.x + best.b.x) / 2, my = (best.a.y + best.b.y) / 2;
+      return Math.abs(best.a.x - best.b.x) < 0.5 ? { x: mx + 14, y: my } : { x: mx, y: my - 10 };
+    };
+    const rendered = [];
+    for (const edge of edges) {
+      const from = pos.get(edge.from), to = pos.get(edge.to);
+      if (!from || !to) continue;
+      let points = null;
+      if ((rank.get(edge.to) ?? 0) > (rank.get(edge.from) ?? 0)) {
+        const sx = from.x + from.w / 2, sy = from.y + from.h, tx = to.x + to.w / 2, ty = to.y, channel = (sy + ty) / 2;
+        const direct = [{ x: sx, y: sy }, { x: sx, y: channel }, { x: tx, y: channel }, { x: tx, y: ty }];
+        if (!hits(direct, edge.from, edge.to)) points = direct;
+      }
+      if (!points) {
+        const lane = x => [{ x: from.x + from.w, y: from.y + from.h / 2 }, { x, y: from.y + from.h / 2 }, { x, y: to.y + to.h / 2 }, { x: to.x + to.w, y: to.y + to.h / 2 }];
+        points = !hits(lane(width - 24), edge.from, edge.to) ? lane(width - 24) : lane(24);
+      }
+      const label = labelOf(points);
+      rendered.push({ d: pathOf(points), lx: Math.max(32, Math.min(width - 32, label.x)), ly: Math.max(12, Math.min(height - 10, label.y)), label: edge.on || "complete" });
+    }
+    return { width, height, nodes: nodes.map(node => ({ ...node, ...pos.get(node.id) })), edges: rendered };
+  }
+  function graphHtml() {
+    const graph = layout(state.definition);
+    const tokens = state.run?.tokens || [];
+    const byNode = latest(tokens);
+    const counts = new Map();
+    for (const token of tokens) counts.set(token.nodeId, (counts.get(token.nodeId) || 0) + 1);
+    const parts = [];
+    parts.push('<svg viewBox="0 0 ' + graph.width + " " + graph.height + '" preserveAspectRatio="xMidYMin meet" role="img" aria-label="workflow graph">');
+    parts.push('<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#8a929e"/></marker></defs>');
+    for (const edge of graph.edges) {
+      parts.push('<path d="' + edge.d + '" fill="none" stroke="#8a929e" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>');
+      if (edge.label !== "complete") {
+        const width = Math.max(18, edge.label.length * 4.8 + 8);
+        parts.push('<rect x="' + (edge.lx - width / 2) + '" y="' + (edge.ly - 6) + '" width="' + width + '" height="12" rx="6" class="edge-pill"/>');
+        parts.push('<text x="' + edge.lx + '" y="' + (edge.ly + 3) + '" text-anchor="middle" class="edge-label">' + esc(edge.label) + "</text>");
+      }
+    }
+    for (const node of graph.nodes) {
+      const token = byNode.get(node.id);
+      const status = tone(token?.status);
+      const style = STYLE[node.type] || { color: "#8a929e", glyph: "?", fill: "transparent" };
+      const lines = wrap(node.title || node.id, 92);
+      const typeY = node.y + 18 + lines.length * 12 + 3;
+      parts.push('<g class="node" data-node="' + esc(node.id) + '" role="button" tabindex="0">');
+      parts.push('<rect class="node-box ' + status + '" x="' + node.x + '" y="' + node.y + '" width="' + node.w + '" height="' + node.h + '" rx="8" style="fill:' + style.fill + '"/>');
+      if (node.type === "subworkflow") parts.push('<rect x="' + (node.x + 2.5) + '" y="' + (node.y + 2.5) + '" width="' + (node.w - 5) + '" height="' + (node.h - 5) + '" rx="6" fill="none" stroke="' + style.color + '" stroke-width=".7" opacity=".65"/>');
+      parts.push('<rect x="' + (node.x + 8) + '" y="' + (node.y + 8) + '" width="18" height="18" rx="5" fill="' + style.color + '"/>');
+      parts.push('<text x="' + (node.x + 17) + '" y="' + (node.y + 21) + '" text-anchor="middle" class="node-glyph">' + esc(style.glyph) + "</text>");
+      parts.push('<text x="' + (node.x + 32) + '" y="' + (node.y + 18) + '" class="node-title">');
+      lines.forEach((line, index) => parts.push('<tspan x="' + (node.x + 32) + '" dy="' + (index ? 12 : 0) + '">' + esc(line) + "</tspan>"));
+      parts.push("</text>");
+      parts.push('<text x="' + (node.x + 32) + '" y="' + typeY + '" class="node-sub">' + esc(TYPE[node.type] || node.type) + (node.role ? " · " + esc(clip(node.role, 40)) : "") + "</text>");
+      if (node.type === "agent") parts.push('<text x="' + (node.x + 32) + '" y="' + (typeY + 15) + '" class="node-model">' + esc(clip(modelText(node), 68)) + "</text>");
+      const count = counts.get(node.id) || 0;
+      if (count) parts.push('<circle cx="' + (node.x + node.w - 13) + '" cy="' + (node.y + 12) + '" r="8" fill="var(--panel-2)"/><text x="' + (node.x + node.w - 13) + '" y="' + (node.y + 15) + '" text-anchor="middle" class="node-sub">' + count + "</text>");
+      parts.push("</g>");
+    }
+    parts.push("</svg>");
+    return parts.join("");
+  }
+  function waitingHtml() {
+    const waiting = state.run?.waiting || [];
+    if (!waiting.length) return '<div class="kv"><dt>状态</dt><dd>' + esc(state.run ? (STATUS[state.run.status] || state.run.status) : "尚未运行") + "</dd></div>";
+    return '<div class="wait-title">待决策 · ' + waiting.length + "</div>" + waiting.map(token =>
+      '<div class="decision"><span title="' + esc(token.nodeId) + '">' + esc(token.title || token.nodeId) + "</span>" +
+      token.outcomes.map(outcome => '<button class="btn ' + (outcome === "reject" ? "danger" : "primary") + '" data-token="' + esc(token.tokenId) + '" data-outcome="' + esc(outcome) + '">' + esc(outcome) + "</button>").join("") +
+      "</div>"
+    ).join("");
+  }
+  function detailHtml() {
+    const box = $("nodeDetail");
+    if (!selected || !state.definition) { box.classList.remove("show"); box.innerHTML = ""; return; }
+    const node = state.definition.nodes.find(item => item.id === selected);
+    if (!node) { box.classList.remove("show"); box.innerHTML = ""; return; }
+    const token = latest(state.run?.tokens || []).get(selected);
+    box.classList.add("show");
+    box.innerHTML = '<dl class="kv"><dt>节点</dt><dd>' + esc(node.id) + '</dd><dt>类型</dt><dd>' + esc(TYPE[node.type] || node.type) + "</dd>" +
+      (token ? "<dt>状态</dt><dd>" + esc(TOKEN[token.status] || token.status) + "</dd>" : "") +
+      (token?.model ? "<dt>模型</dt><dd>" + esc([token.model.provider, token.model.model].filter(Boolean).join(" / ")) + "</dd>" : "") +
+      "</dl><pre>" + esc(JSON.stringify(token?.output ?? node.config ?? {}, null, 2)) + "</pre>";
+  }
+  function render() {
+    if (!state) return;
+    if (!state.defined) {
+      $("name").textContent = "工作流看板";
+      $("sub").textContent = "当前会话还没有工作流";
+      $("graph").innerHTML = '<div class="empty"><strong>还没有工作流</strong>让助手通过工具创建一个。</div>';
+      return;
+    }
+    const definition = state.definition;
+    const run = state.run;
+    $("name").textContent = definition.name;
+    $("sub").textContent = definition.nodes.length + " 节点 · " + definition.edges.length + " 边";
+    const status = $("status");
+    status.className = "status " + (run ? run.status : "");
+    status.textContent = run ? (STATUS[run.status] || run.status) : "未运行";
+    $("graph-hint").textContent = (run?.tokens?.length || 0) + " 次执行";
+    $("run-hint").textContent = run ? run.runId : "";
+    $("graph").innerHTML = graphHtml();
+    $("waiting").innerHTML = waitingHtml();
+    detailHtml();
+  }
+  async function action(name) {
+    if (busy || !state) return;
+    if (name === "refresh") return load();
+    if (name === "new") { $("startInput").focus(); return; }
+    if (name === "run") {
+      if (!state.run?.runId) return;
+      busy = true;
+      try { state = await postJson(API + "/run", { session: SESSION, runId: state.run.runId }); render(); toast("已更新", "ok"); }
+      catch (error) { toast(error.message, "error"); }
+      finally { busy = false; }
+      return;
+    }
+    if (name === "start") {
+      let input;
+      try { input = JSON.parse($("startInput").value || "{}"); }
+      catch (error) { return toast("输入不是 JSON: " + error.message, "error"); }
+      if (!input || typeof input !== "object" || Array.isArray(input)) return toast("输入必须是 JSON 对象", "error");
+      busy = true;
+      try {
+        state = await postJson(API + "/start", { session: SESSION, input });
+        if (state.run?.runId) state = await postJson(API + "/run", { session: SESSION, runId: state.run.runId });
+        render(); toast("已启动", "ok");
+      } catch (error) { toast(error.message, "error"); }
+      finally { busy = false; }
+    }
+  }
+  async function decide(token, outcome) {
+    if (busy || !state?.run?.runId) return;
+    busy = true;
+    try {
+      state = await postJson(API + "/decide", { session: SESSION, runId: state.run.runId, tokenId: token, outcome });
+      state = await postJson(API + "/run", { session: SESSION, runId: state.run.runId });
+      render(); toast("已记录 " + outcome, "ok");
+    } catch (error) { toast(error.message, "error"); }
+    finally { busy = false; }
+  }
+  document.addEventListener("click", event => {
+    const actionNode = event.target.closest("[data-action]");
+    if (actionNode) { action(actionNode.getAttribute("data-action")); return; }
+    const decision = event.target.closest("[data-token]");
+    if (decision) { decide(decision.getAttribute("data-token"), decision.getAttribute("data-outcome")); return; }
+    const node = event.target.closest("[data-node]");
+    if (node) { selected = node.getAttribute("data-node"); detailHtml(); }
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const node = event.target.closest("[data-node]");
+    if (!node) return;
+    event.preventDefault();
+    selected = node.getAttribute("data-node");
+    detailHtml();
+  });
+  if (!SESSION) {
+    $("graph").innerHTML = '<div class="empty"><strong>缺少 session 参数</strong>URL 需要 ?session=&lt;session-id&gt;。</div>';
+  } else {
+    load();
+    setInterval(() => { if (!document.hidden && !busy) load(); }, 5000);
+  }
+})();
+</script>
+</body>
+</html>

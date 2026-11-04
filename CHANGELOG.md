@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.5.0
+
+- Edge routing is orthogonal and checks node rectangles; long/skipped edges use
+  a side lane instead of crossing nodes, and labels are offset from the line so
+  their white background no longer hides it.
+- Node titles wrap to two lines; oversized titles still end with an ellipsis.
+  The tool usage now asks the model for short kebab-case ids and concise titles.
+- Add an optional standalone board URL:
+  `/plugins/dsh-agent-team-workflow/board?session=<id>`.
+  It reuses the same-origin DSH connection/auth and APIs, and
+  `team_workflow_status` returns it as `boardUrl`.
+- 32 tests passing.
+
 ## 1.4.0
 
 - Clearer graph edges: thicker 1.5px strokes, larger fixed-size arrowheads,

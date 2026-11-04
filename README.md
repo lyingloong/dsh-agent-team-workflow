@@ -231,6 +231,10 @@ call executes it until the human node; the panel or another run call continues
 after the decision. `gh pr create` is intentionally one-shot in this example;
 re-running on a branch that already has a PR fails the `pr` node.
 
+This is a single-seed flow. A persistent public seed pool and a pending-PR pool
+are not runtime primitives yet: each run starts from its input, and human
+decisions are per run. Use one run per seed until those queue primitives land.
+
 ## Web panel
 
 The right-sidebar **工作流** tab is graph-first:
@@ -238,8 +242,8 @@ The right-sidebar **工作流** tab is graph-first:
 - a compact header with workflow name, run status, node/edge count and
   permission state;
 - the node graph, which scales to the available pane size; each node type has
-  its own glyph, tint, border and type label, with thicker arrows and outcome
-  labels;
+  its own glyph, tint, border and type label; orthogonal edges route around
+  nodes, labels sit beside lines, and long titles wrap to two lines;
 - waiting human decisions with outcome buttons;
 - clicking a node opens a sheet with its latest token, output, errors and raw
   config; agent nodes include an ordered model fallback list with add/remove/
@@ -251,6 +255,20 @@ The panel deliberately stays an observer/light controller, not a workflow
 builder: the session model authors definitions through the tools. It can only
 run a session whose Agent has been observed by a tool call; after a host restart,
 run once from the assistant or call a tool first.
+
+## Standalone board URL
+
+The same board is available as an optional browser page:
+
+```
+<Harness origin>/plugins/dsh-agent-team-workflow/board?session=<session-id>
+```
+
+`team_workflow_status` returns this as `boardUrl`. It is same-origin and uses the
+DSH Connection authentication fence; it is not a second server or port. The page
+can view the graph, node details, waiting decisions, start a run and continue a
+run (the latter uses the last Agent observed for that session, same as the side
+panel).
 
 ## Development
 
