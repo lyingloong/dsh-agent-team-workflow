@@ -39,6 +39,7 @@ A workflow is nodes plus edges. Node types:
 
 Inputs map values from "$input", "$nodes.<id>.output", "$item", "$index" or "$context".
 Edges select the next node: {from, to, on}. "on" is the outcome (default complete).
+Keep node ids short kebab-case and node titles concise (about 12 Chinese characters or 24 Latin characters); the panel wraps to two lines but brevity reads better.
 
 Permissions are NOT part of the definition. Before creating a workflow that uses
 command/http nodes, ask the user whether to grant full/allowlist access.
@@ -87,7 +88,7 @@ export function apply(ctx, config = {}) {
   mount(toolStart({ storeFor }));
   mount(toolRun({ storeFor, ctx, settings, cwdOf }));
   mount(toolDecide({ storeFor }));
-  mount(toolStatus({ storeFor }));
+  mount(toolStatus({ storeFor, ctx }));
 
   installWebApi({ ctx, dataRoot: settings.dataDir ?? defaultDataDir(), agents, settings, logger: console });
 
@@ -240,27 +241,32 @@ function toolDecide({ storeFor }) {
   };
 }
 
-function toolStatus({ storeFor }) {
+function toolStatus({ storeFor, ctx }) {
   return {
     name: 'team_workflow_status',
-    description: 'Show the stored v2 definition summary and the latest run: status, waiting human decisions and token counts.',
+    description: 'Show the stored v2 definition summary and the latest run: status, waiting human decisions, token counts and the optional board URL.',
     parameters: objectSchema({ runId: stringSchema('Optional run id; defaults to the latest run.') }, []),
     output: {
       schema: objectSchema({
         defined: booleanSchema(),
         summary: stringSchema(),
         run: freeObject('Latest run document, or {status:"none"}.'),
-      }, ['defined', 'summary', 'run']),
-      render: (_args, value) => [{ type: 'text', text: `${value.summary}\nrun: ${JSON.stringify(value.run)}` }],
+        boardUrl: stringSchema(),
+      }, ['defined', 'summary', 'run', 'boardUrl']),
+      render: (_args, value) => [{ type: 'text', text: `${value.summary}\nrun: ${JSON.stringify(value.run)}${value.boardUrl ? `\nboard: ${value.boardUrl}` : ''}` }],
     },
     async execute(args, exec) {
       const store = storeFor(exec);
       const stored = await store.loadDefinition();
       const state = await loadRun(store, args?.runId).catch(() => null);
+      const session = exec?.agent?.id ?? 'local';
+      const origin = ctx.get?.('webServer')?.getOrigin?.() ?? '';
+      const boardUrl = `${String(origin).replace(/\/$/, '')}/plugins/dsh-agent-team-workflow/board?session=${encodeURIComponent(session)}`;
       return {
         defined: stored !== null,
         summary: stored ? describeDefinition(stored.definition) : 'no workflow defined',
         run: state ? summarizeRun(state) : { status: 'none' },
+        boardUrl,
       };
     },
   };
