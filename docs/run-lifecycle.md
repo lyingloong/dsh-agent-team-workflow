@@ -33,9 +33,9 @@ The shared runner admits only one job per session. Start/define/model-change/dec
 - Save `running` before launching each node, then save its result and successor tokens.
 - Persist child session/model information as soon as a subagent is admitted; nested runs are attached to the parent token before execution.
 - Every executor uses the run-owned cancellation signal. Every acquired subagent activation is released in `finally`, including success.
-- Agent deadline defaults to 10 minutes. `agentTimeoutMs` config or a node's `config.timeoutMs` can override it. Cancellation is `execution_aborted`, not a reason to try another model.
+- Agent/development nodes have **no default task deadline**. Slow models and long edits may continue until completion or explicit Stop. A positive `agentTimeoutMs` or `config.timeoutMs` is optional opt-in; `0` disables it. Command and HTTP request timeouts remain operation-specific, not a total workflow deadline. Cancellation is `execution_aborted`, not a reason to try another model.
 - A node returning `fail`/`needs_revision` repeatedly has a default budget of 3 failures (`config.maxFailures` overrides). The last output/error remains inspectable when the circuit breaker stops the chain.
-- A step-budget limit yields a resumable `paused` run; it is not a terminal failure.
+- The runtime step budget yields a scheduler slice, not a terminal failure. The same managed job automatically takes the next slice (respecting live pause/cancel), so a long run does not require another click every 40 nodes. Human waits, control-off, and failures are never auto-approved or auto-replayed.
 - `failed` and `interrupted` runs do not execute a hidden extra ready token when Run is clicked again.
 - A persisted running marker with no live host job is reported as interrupted/unknown. A still-live native job is not declared orphaned merely because a local map is empty. No uncertain command or agent action is automatically replayed.
 - Atomic snapshots protect a single write; the runner supplies execution ownership. This is a single-host coordinator, not a distributed lock or an exactly-once transaction across Git/GitHub.

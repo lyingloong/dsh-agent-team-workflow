@@ -140,3 +140,16 @@ test('persisted job still live in host registry is not called an orphan',async t
   assert.equal((await env.store.latestRun()).tokens[0].status,'running');
   hold.resolve({status:'completed'});await env.jobs.settle(jobId);
 });
+
+
+test('managed job continues step-budget slices until the next real wait',async t=>{
+  let calls=0;
+  const env=await setup(t,{startActivation:async()=>{calls++;return {childId:'child-'+calls,result:Promise.resolve(done('ok')),dispose:async()=>{}};}},{settings:{maxSteps:1}});
+  const nodes=Array.from({length:5},(_,i)=>({id:'work'+i,type:'agent'}));nodes.push({id:'approval',type:'human'});
+  const edges=nodes.slice(0,-1).map((node,i)=>({from:node.id,to:nodes[i+1].id}));
+  const state=newRunState({definition:definition(nodes,edges),permissions:DEFAULT_PERMISSIONS,cwd:env.dir});await env.store.saveRun(state);
+  const receipt=await env.runner.dispatch('owner');await env.jobs.settle(receipt.execution.jobId);
+  const end=await env.store.latestRun();assert.equal(end.status,'waiting');assert.equal(calls,5);assert.equal(end.execution.active,false);
+  assert.equal(end.tokens.at(-1).nodeId,'approval');assert.equal(end.tokens.at(-1).status,'waiting');
+  assert.equal(env.jobs.records.size,1);
+});

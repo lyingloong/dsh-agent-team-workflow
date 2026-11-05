@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Remove the default 10-minute model/development task deadline. Keep explicit
+  Stop/cancellation and optional positive opt-in timeouts; 0 disables a timeout.
+- Continue cooperative step-budget slices inside the same managed job instead
+  of requiring manual Run every 40 nodes. Human/control waits are unchanged.
+- Give the development example an explicit no-requirement/idle human wait rather
+  than passing a blocked proposal to risk assessment.
+
 - Restore ordered multi-model selection in node details: checkbox multi-select,
   up/down/remove, explicit save and default inheritance. Unsaved lists survive
   polling; all selected candidates persist through the board API. Call errors

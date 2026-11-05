@@ -137,7 +137,7 @@ function validateNodeConfig(node, path, errors, depth) {
   const config = node.config;
   if (config.maxFailures !== undefined) integer(config.maxFailures, `${path}.config.maxFailures`, errors, 1, 20);
   if (node.type === 'agent') {
-    if (config.timeoutMs !== undefined) integer(config.timeoutMs, `${path}.config.timeoutMs`, errors, 100, 3_600_000);
+    if (config.timeoutMs !== undefined) integer(config.timeoutMs, `${path}.config.timeoutMs`, errors, 0, 3_600_000);
     if (config.prompt !== undefined) text(config.prompt, `${path}.config.prompt`, errors, 20_000);
     if (config.lane !== undefined) text(config.lane, `${path}.config.lane`, errors, 80);
     if (config.provider !== undefined) text(config.provider, `${path}.config.provider`, errors, 120);

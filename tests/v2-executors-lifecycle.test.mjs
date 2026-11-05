@@ -291,3 +291,19 @@ test('HTTP deadline covers a stalled response body', async t => {
   await assert.rejects(executors.http({ node: { id: 'request', config: { url: 'https://example.invalid', timeoutMs: 20 } } }), { code: 'execution_timeout' });
   assert.equal(fetchSignal.aborted, true);
 });
+
+
+test('default agent has no task timer but still releases its cancellation subscription', async t => {
+  const timer=t.mock.method(globalThis,'setTimeout',()=>{throw new Error('agent default must not arm a task timer');});
+  const parent=new AbortController();let disposed=0;let signal;
+  const executor=setup(async spec=>{signal=spec.signal;return {result:Promise.resolve(completed()),dispose:async()=>{disposed++;}};},{signal:parent.signal});
+  await executor.agent(argsFor());
+  assert.equal(timer.mock.callCount(),0);assert.equal(disposed,1);assert.equal(signal.aborted,false);
+  assert.equal(getEventListeners(parent.signal,'abort').length,0);
+});
+
+test('timeoutMs zero explicitly disables an inherited optional agent timeout', async t => {
+  const timer=t.mock.method(globalThis,'setTimeout',()=>{throw new Error('zero must not arm timer');});
+  const executor=setup(async()=>({result:Promise.resolve(completed()),dispose:async()=>{}}),{settings:{agentTimeoutMs:25}});
+  await executor.agent(argsFor({timeoutMs:0}));assert.equal(timer.mock.callCount(),0);
+});

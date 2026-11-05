@@ -15,9 +15,9 @@ import { stat } from 'node:fs/promises';
 
 const execAsync = promisify(exec);
 
-// One agent node, including its model fallback list, has a ten-minute default
-// deadline. node.config.timeoutMs overrides settings.agentTimeoutMs.
-const DEFAULT_AGENT_TIMEOUT_MS = 10 * 60_000;
+// Model/development work has no default wall-clock deadline.
+// A positive explicit node/settings timeout is opt-in; 0 disables it.
+const DEFAULT_AGENT_TIMEOUT_MS = 0;
 
 export function createExecutors({ ctx, exec, settings = {}, cwd, onActivity }) {
   const subagents = ctx.get?.('subagents');
@@ -159,18 +159,18 @@ function executionError(code, message, cause) {
 }
 
 function executionScope(parentSignal, timeoutMs, label) {
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647) {
-    throw executionError('invalid_execution_timeout', `${label} timeoutMs must be a positive integer no greater than 2147483647`);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0 || timeoutMs > 2_147_483_647) {
+    throw executionError('invalid_execution_timeout', `${label} timeoutMs must be 0 (disabled) or a positive integer no greater than 2147483647`);
   }
   const controller = new AbortController();
   const abort = () => controller.abort(executionError('execution_aborted', `${label} cancelled`, parentSignal?.reason));
   parentSignal?.addEventListener('abort', abort, { once: true });
   if (parentSignal?.aborted) abort();
-  const timer = setTimeout(() => controller.abort(executionError('execution_timeout', `${label} exceeded ${timeoutMs}ms`)), timeoutMs);
+  const timer = timeoutMs > 0 ? setTimeout(() => controller.abort(executionError('execution_timeout', `${label} exceeded ${timeoutMs}ms`)), timeoutMs) : null;
   return {
     signal: controller.signal,
     dispose() {
-      clearTimeout(timer);
+      if (timer !== null) clearTimeout(timer);
       parentSignal?.removeEventListener('abort', abort);
     },
   };

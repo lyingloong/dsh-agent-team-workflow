@@ -51,7 +51,11 @@
         "intake": "$nodes.intake.output"
       },
       "config": {
-        "prompt": "You own the mined-requirement seed pool for a continuous loop. Read poolPath from Input when present, otherwise requirements/seeds.json, docs/requirements*.json or REQUIREMENTS.md. The pool is JSON: [{id,title,status,priority,tags,acceptance,body}]. If feedback is present from a rejected human requirement review, revise the previously proposed mined requirement using that feedback. Choose exactly one seed with status ready, highest priority first; if no pool exists or no ready seed remains, mine exactly one small repository improvement from the current tree. Do not edit application code. You may only update the selected seed's status to claimed and record the run id; never edit other seeds. Return JSON {seedId,poolPath,title,body,tags,acceptance,riskHints,plan}. If nothing can be mined, return {blocked:true,reason}. If Input.intake.requirement exists, refine that exact record/id rather than discard it for a different seed. Feedback must concern the same id. Do not manufacture a risk approval for an empty or blocked proposal."
+        "prompt": "You own the mined-requirement seed pool for a continuous loop. Read poolPath from Input when present, otherwise requirements/seeds.json, docs/requirements*.json or REQUIREMENTS.md. The pool is JSON: [{id,title,status,priority,tags,acceptance,body}]. If feedback is present from a rejected human requirement review, revise the previously proposed mined requirement using that feedback. Choose exactly one seed with status ready, highest priority first; if no pool exists or no ready seed remains, mine exactly one small repository improvement from the current tree. Do not edit application code. You may only update the selected seed's status to claimed and record the run id; never edit other seeds. Return JSON {seedId,poolPath,title,body,tags,acceptance,riskHints,plan}. If nothing can be mined, return {blocked:true,reason}. If Input.intake.requirement exists, refine that exact record/id rather than discard it for a different seed. Feedback must concern the same id. Do not manufacture a risk approval for an empty or blocked proposal. Return outcome ready only with a concrete actionable requirement. If no useful requirement exists, return outcome blocked with output {reason}; do not send an empty proposal onward.",
+        "outcomes": [
+          "ready",
+          "blocked"
+        ]
       }
     },
     {
@@ -206,6 +210,16 @@
       "config": {
         "prompt": "Mark this requirement complete in requirements/requirements.json: find the matching id and set status=done, completedAt, and the PR URL if available. If the requirement came from a seed, mark that seed done in requirements/seeds.json. Do not edit application code or other requirements. Return JSON {requirementId,status}."
       }
+    },
+    {
+      "id": "requirements_wait",
+      "type": "human",
+      "title": "等待新需求或种子",
+      "config": {
+        "outcomes": [
+          "retry"
+        ]
+      }
     }
   ],
   "edges": [
@@ -227,7 +241,7 @@
     {
       "from": "analyst",
       "to": "risk",
-      "on": "complete"
+      "on": "ready"
     },
     {
       "from": "risk",
@@ -318,6 +332,16 @@
       "from": "complete",
       "to": "gate",
       "on": "complete"
+    },
+    {
+      "from": "analyst",
+      "to": "requirements_wait",
+      "on": "blocked"
+    },
+    {
+      "from": "requirements_wait",
+      "to": "gate",
+      "on": "retry"
     }
   ]
 }

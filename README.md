@@ -319,6 +319,9 @@ The board is graph-first:
   Cancellation, the overall node deadline, and invalid routing output stop rather
   than switching models. Each node attempt starts from the first candidate;
   this is ordered failover, not round-robin load balancing;
+- model/development nodes have no default wall-clock deadline; Stop is explicit.
+  Positive timeouts are opt-in, and step budgets yield automatically within the
+  same managed job rather than ending a long workflow;
 - the **运行** card shows the bound cwd, job id, current node/child, last checkpoint,
   errors, Continue, Stop and the continuous switch; turning it off pauses at the
   next node boundary, not only at gates;

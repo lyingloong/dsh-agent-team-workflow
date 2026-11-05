@@ -24,7 +24,7 @@ const DEFAULT_CONFIG = {
   subagentProvider: 'spawn',
   promptSectionOrder: 118,
   maxSteps: 40,
-  agentTimeoutMs: 600_000,
+  agentTimeoutMs: 0,
   maxFailures: 3,
 };
 

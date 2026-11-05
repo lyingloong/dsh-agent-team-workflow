@@ -198,11 +198,16 @@ export class WorkflowRunner {
         ctx: this.ctx, exec: { agent, signal: controller.signal }, settings: this.settings, cwd: state.cwd,
         onActivity: async (token, activity) => { token.activity = { ...activity, startedAt: new Date().toISOString() }; await checkpoint(); },
       });
-      await run(state, executors, {
-        maxSteps: this.settings.maxSteps ?? 40,
-        maxFailures: this.settings.maxFailures ?? 3,
-        control: () => store.loadControl(), signal: controller.signal, checkpoint,
-      });
+      // maxSteps is a cooperative scheduler slice, not a lifetime task limit.
+      do {
+        await run(state, executors, {
+          maxSteps: this.settings.maxSteps ?? 40,
+          maxFailures: this.settings.maxFailures ?? 3,
+          control: () => store.loadControl(), signal: controller.signal, checkpoint,
+        });
+        if (state.status !== 'paused' || state.pauseReason !== 'step_budget' || controller.signal.aborted) break;
+        await new Promise(resolve => setImmediate(resolve));
+      } while (true);
     } catch (error) {
       state.status = controller.signal.aborted ? 'interrupted' : 'failed';
       state.lastError = error.message;
