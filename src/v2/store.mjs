@@ -8,6 +8,7 @@
 
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 export class SessionStore {
   constructor(dataDir) {
@@ -53,14 +54,18 @@ export class SessionStore {
   }
 
   async saveRun(run) {
+    assertRunId(run?.runId);
     await mkdir(this.runsDir, { recursive: true });
     await atomicJson(path.join(this.runsDir, `${run.runId}.json`), run);
     return run;
   }
 
   async loadRun(runId) {
+    assertRunId(runId);
     const text = await readFile(path.join(this.runsDir, `${runId}.json`), 'utf8');
-    return JSON.parse(text);
+    const value = JSON.parse(text);
+    if (value?.runId !== runId) throw Object.assign(new Error('Stored run identity does not match its file'), { code: 'invalid_run_state' });
+    return value;
   }
 
   async listRuns() {
@@ -75,16 +80,12 @@ export class SessionStore {
     for (const name of names) {
       if (!name.endsWith('.json')) continue;
       try {
-        runs.push(JSON.parse(await readFile(path.join(this.runsDir, name), 'utf8')));
+        runs.push(await this.loadRun(name.slice(0, -5)));
       } catch {
         // A corrupt run is skipped rather than breaking the list.
       }
     }
     return runs.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  }
-
-  async clearRuns() {
-    await rm(this.runsDir, { recursive: true, force: true });
   }
 
   async latestRun() {
@@ -94,7 +95,13 @@ export class SessionStore {
 }
 
 async function atomicJson(file, value) {
-  const temporary = `${file}.tmp-${process.pid}-${Date.now()}`;
+  const temporary = `${file}.tmp-${process.pid}-${randomUUID()}`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
-  await rename(temporary, file);
+  try { await rename(temporary, file); } finally { await rm(temporary, { force: true }); }
+}
+
+function assertRunId(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(value)) {
+    throw Object.assign(new Error('runId must be a safe identifier, not a path'), { code: 'invalid_run_id' });
+  }
 }

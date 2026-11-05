@@ -6,7 +6,7 @@
 edges choose the next node from an outcome. The runtime owns scheduling and
 permissions; nodes do the work.
 
-**Status:** 1.0.0. The v2 node runtime replaces the old stage/kanban engine
+**Status:** v2 node runtime. The v2 node runtime replaces the old stage/kanban engine
 entirely. There is no v1 compatibility layer, state migration or dual tool set.
 
 ## Concepts
@@ -14,7 +14,7 @@ entirely. There is no v1 compatibility layer, state migration or dual tool set.
 | Term | Meaning |
 | --- | --- |
 | Definition | `apiVersion: 2` JSON: providers, nodes, edges, entry. |
-| Node | One typed unit: `agent`, `command`, `http`, `human`, `fanout`, `join`, `subworkflow`. |
+| Node | One typed unit: `agent`, `command`, `http`, `human`, `fanout`, `join`, `gate`, `subworkflow`. |
 | Edge | `{from, to, on}`; `on` is an outcome, default `complete`. |
 | Token | One execution of a node. A run has many tokens. |
 | Run | One workflow execution with input, context and tokens. |
@@ -27,7 +27,7 @@ State is per DSH session under `<dataDir>/sessions/<sessionId>`:
 - `workflow.json` — definition + permission grant;
 - `runs/<runId>.json` — token state, context, status.
 
-Writes are atomic JSON. A host restart resumes the same run document.
+Writes are atomic JSON, with checkpoints before and after every node. Runs bind a repository cwd at start. Host shutdown preserves evidence but does not automatically replay uncertain in-flight work. See [run lifecycle and troubleshooting](docs/run-lifecycle.md).
 
 ## Install
 
@@ -53,8 +53,8 @@ calls the tools:
 The model will ask before granting command/HTTP access. Typical sequence:
 
 1. `team_workflow_define` — validate and store the definition and the permission grant.
-2. `team_workflow_start` — create a run with an input object.
-3. `team_workflow_run` — execute ready nodes until the run waits or finishes.
+2. `team_workflow_start` — bind the absolute target `cwd`, preflight, and create a run with input.
+3. `team_workflow_run` — dispatch a session-owned job and return immediately; collect it with `job_output`, stop it with `job_kill`.
 4. `team_workflow_decide` — resolve a waiting human node.
 5. `team_workflow_status` — inspect the definition and latest run.
 
@@ -63,10 +63,10 @@ The model will ask before granting command/HTTP access. Typical sequence:
 | Tool | Purpose |
 | --- | --- |
 | `team_workflow_define` | Validate and store a definition plus permission grant. |
-| `team_workflow_start` | Create a run from an input object. |
-| `team_workflow_run` | Execute ready nodes; human waits and joins pause it. |
+| `team_workflow_start` | Bind a repository cwd and preflight a new run; history is preserved. |
+| `team_workflow_run` | Start/find a managed job; return cwd, jobId and current-node progress without blocking. |
 | `team_workflow_decide` | Resolve a waiting human token. |
-| `team_workflow_status` | Show definition summary and latest run. |
+| `team_workflow_status` | Read persisted cwd/job/current-token/checkpoint/error state without executing anything. |
 
 ## Permissions
 
@@ -241,8 +241,8 @@ Record requirement
             └─ reject → Implement (with note)
 ```
 
-The gate owns the continuous switch. When it is off, a token waits at the gate
-and the loop stops; new user requirements and mined seeds can still be appended
+The continuous switch is read before every next node, including repair loops.
+When it is off, the current node finishes and the next node does not start; new user requirements and mined seeds can still be appended
 to the repository queue. When it is on, `team_workflow_run` wakes the gate and
 the next queued requirement runs. The engine is serial, so processing is one
 requirement at a time.
@@ -275,23 +275,25 @@ with access to `team_workflow_decide` can approve/reject; the board also offers 
 note field, and the note is passed to implementation. GitHub PR comments remain
 the place for threaded PR feedback.
 
-The switch can be toggled on the board. Turning it on immediately calls the run
-endpoint to wake a paused gate; turning it off lets the current item finish and
-then waits at the gate. The board also shows the queued requirements and ready
+The switch can be toggled on the board. Turning it on dispatches a job to wake
+resumable paused work; turning it off pauses at the next node boundary. Failed
+or interrupted work requires inspection, not an automatic replay. The board also shows the queued requirements and ready
 seed count.
 
 It requires a command grant for `git`, `npm` and `gh` (the workflow is defined
 with that allowlist), a configured `gh` login, and a session whose cwd is the
-target repository. The PR step is idempotent: it commits when there are staged
-changes, creates the PR only when needed, and resolves the existing PR URL.
+target repository. The example uses a fixed branch and attempts to reuse its PR. This is not an
+exactly-once transaction; inspect branch/PR state before restarting interrupted
+work or processing another item.
 `team_workflow_run` executes until a human node; the web board or another run
 call continues after the decision.
 
 [examples/auto-dev.json](examples/auto-dev.json) is the smaller discovery →
 branch → implement → test → review → PR → human decision → merge variant.
 
-Each run selects one seed; the pools are not persistent queues, and one PR is
-reviewed at a time.
+Each cycle selects one seed; the pools remain prompt-managed files, and one PR
+is reviewed at a time. The explicit cycle boundary consumes the initial user
+request once and clears prior-item node feedback while retaining goal/poolPath.
 
 ## Web board
 
@@ -312,8 +314,9 @@ The board is graph-first:
   token input, run context, node config, errors, token history, attempt/model
   metadata and clickable upstream/downstream links; agent nodes include a model
   picker backed by the host model catalog and the node-model API;
-- the **运行** card shows progress, the continue action and the continuous-run
-  switch; turning it on wakes a paused gate, turning it off waits at the gate;
+- the **运行** card shows the bound cwd, job id, current node/child, last checkpoint,
+  errors, Continue, Stop and the continuous switch; turning it off pauses at the
+  next node boundary, not only at gates;
 - a **需求队列** card shows queued user requirements and ready seed count;
 - a separate **Human 待办** card lists every waiting human token with a count,
   outcome buttons, a freeform note field and recent human decisions. Notes are
@@ -324,7 +327,8 @@ The board is graph-first:
 The board deliberately stays an observer/light controller, not a workflow
 builder: the session model authors definitions through the tools. It can only
 run a session whose Agent has been observed by a tool call; after a host restart,
-run once from the assistant or call a tool first.
+call a workflow tool to re-establish the live session association first. A run
+interrupted by shutdown is preserved for inspection, never silently replayed.
 
 ## Board URL and native Browser tab
 
@@ -336,10 +340,8 @@ through DSH's native Browser tab:
 ctx.sidebarRight.openTab('browser', { params: { url } })
 ```
 
-The separate origin is required twice: the Browser tab refuses URLs on the DSH
-application origin, and serving from the application web server lets its framing
-middleware block the page inside the Browser tab. A standalone server avoids
-both. The URL is:
+The Browser tab refuses the DSH application origin. The board therefore uses
+a dedicated loopback origin instead of framing the application itself. The URL is:
 
 ```
 http://127.0.0.1:<board-port>/plugins/dsh-agent-team-workflow/public/board?session=<session-id>&token=<token>

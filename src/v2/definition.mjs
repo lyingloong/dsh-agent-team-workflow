@@ -135,7 +135,9 @@ function readNodes(raw, errors, depth) {
 
 function validateNodeConfig(node, path, errors, depth) {
   const config = node.config;
+  if (config.maxFailures !== undefined) integer(config.maxFailures, `${path}.config.maxFailures`, errors, 1, 20);
   if (node.type === 'agent') {
+    if (config.timeoutMs !== undefined) integer(config.timeoutMs, `${path}.config.timeoutMs`, errors, 100, 3_600_000);
     if (config.prompt !== undefined) text(config.prompt, `${path}.config.prompt`, errors, 20_000);
     if (config.lane !== undefined) text(config.lane, `${path}.config.lane`, errors, 80);
     if (config.provider !== undefined) text(config.provider, `${path}.config.provider`, errors, 120);
@@ -186,6 +188,9 @@ function validateNodeConfig(node, path, errors, depth) {
     if (!JOIN_MODES.includes(mode)) errors.push({ path: `${path}.config.mode`, message: `must be one of ${JOIN_MODES.join(', ')}` });
     if (mode === 'quorum' && config.count === undefined) errors.push({ path: `${path}.config.count`, message: 'is required for quorum' });
     if (config.count !== undefined) integer(config.count, `${path}.config.count`, errors, 1, 10_000);
+  } else if (node.type === 'gate') {
+    if (config.newCycle !== undefined && typeof config.newCycle !== 'boolean') errors.push({ path: path + '.config.newCycle', message: 'must be boolean' });
+    if (config.consumeInput !== undefined && (!Array.isArray(config.consumeInput) || config.consumeInput.some(key => typeof key !== 'string' || !/^[A-Za-z][A-Za-z0-9_]*$/.test(key)))) errors.push({ path: path + '.config.consumeInput', message: 'must be top-level input keys' });
   } else if (node.type === 'subworkflow') {
     if (!isObject(config.definition)) {
       errors.push({ path: `${path}.config.definition`, message: 'must be a workflow object' });

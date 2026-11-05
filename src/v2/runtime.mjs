@@ -41,14 +41,17 @@ export function normalizePermissions(raw) {
   return { command: normalize('command'), http: normalize('http') };
 }
 
-export function newRunState({ definition, permissions, input = {}, now = new Date().toISOString() }) {
+export function newRunState({ definition, permissions, input = {}, cwd = null, now = new Date().toISOString() }) {
   const state = {
     version: 2,
     runId: `run-${randomUUID()}`,
     definition,
+    cwd,
+    initialInput: structuredClone(input),
     permissions: normalizePermissions(permissions),
     status: 'running',
-    context: { input, nodes: {}, artifacts: {} },
+    context: { input: structuredClone(input), nodes: {}, artifacts: {} },
+    failureStreaks: {},
     tokens: [],
     fanouts: {},
     createdAt: now,
@@ -56,39 +59,73 @@ export function newRunState({ definition, permissions, input = {}, now = new Dat
   };
   const entry = definition.nodes.find(node => node.id === definition.entry);
   if (!entry) throw new RuntimeError('no_entry', 'definition has no entry node');
-  state.tokens.push(makeToken(entry, resolveInputs(entry, state, null)));
+  state.tokens.push(makeToken(entry, resolveInputs(entry, state, null), now));
   refreshStatus(state);
   return state;
 }
 
 /** Process ready tokens until the run waits for a human/join/gate or a step budget is hit. */
-export async function run(state, executors, { maxSteps = 50, now = () => new Date().toISOString(), control = null } = {}) {
+export async function run(state, executors, {
+  maxSteps = 50, now = () => new Date().toISOString(), control = null,
+  signal, checkpoint = async () => {}, maxFailures = 3,
+} = {}) {
+  // A failed or interrupted attempt is evidence, not permission to replay work.
+  if (['failed', 'interrupted', 'done'].includes(state.status)) return state;
+  const save = async () => { state.updatedAt = now(); await checkpoint(state); };
+  const orphan = state.tokens.find(token => token.status === 'running');
+  if (orphan) {
+    orphan.status = 'interrupted';
+    orphan.error = { code: 'execution_unknown', message: 'The previous execution ended without a terminal checkpoint; inspect its effects before retrying.' };
+    state.status = 'interrupted';
+    state.lastError = orphan.error.message;
+    await save();
+    return state;
+  }
+  state.status = 'running';
+  state.pauseReason = null;
+  state.yieldReason = null;
   let steps = 0;
-  if (control?.continuous !== false) {
-    for (const token of state.tokens) {
-      if (token.status !== 'waiting') continue;
-      const node = state.definition.nodes.find(candidate => candidate.id === token.nodeId);
-      if (node?.type === 'gate' && token.reason === 'gate_paused') {
-        token.status = 'ready';
-        token.reason = null;
-        token.updatedAt = now();
+  while (steps < maxSteps) {
+    if (signal?.aborted) {
+      state.status = 'interrupted';
+      state.lastError = 'Execution cancelled; completed nodes will not be replayed.';
+      await save();
+      return state;
+    }
+    // Read the persisted switch at every safe point, including repair loops.
+    const currentControl = typeof control === 'function' ? await control() : control;
+    if (currentControl?.continuous !== false) {
+      for (const token of state.tokens) {
+        const node = state.definition.nodes.find(candidate => candidate.id === token.nodeId);
+        if (token.status === 'waiting' && node?.type === 'gate' && token.reason === 'gate_paused') {
+          token.status = 'ready';
+          token.reason = null;
+          token.updatedAt = now();
+        }
       }
     }
-  }
-  while (steps < maxSteps) {
     const token = state.tokens.find(candidate => candidate.status === 'ready');
     if (!token) break;
+    const node = state.definition.nodes.find(candidate => candidate.id === token.nodeId);
+    if (currentControl?.continuous === false && node?.type !== 'gate') {
+      state.status = 'paused';
+      state.pauseReason = 'control_off';
+      await save();
+      return state;
+    }
     steps += 1;
-    await executeToken(state, token, executors, now, control);
+    await executeToken(state, token, executors, now, currentControl, { signal, checkpoint: save, maxFailures, controlReader: control });
     refreshStatus(state);
-    state.updatedAt = now();
-    if (state.status === 'failed') break;
-  }
-  if (steps >= maxSteps && state.tokens.some(token => token.status === 'ready')) {
-    throw new RuntimeError('step_budget', `workflow did not settle within ${maxSteps} steps`);
+    await save();
+    if (['failed', 'interrupted'].includes(state.status)) return state;
   }
   refreshStatus(state);
-  state.updatedAt = now();
+  if (steps >= maxSteps && state.tokens.some(token => token.status === 'ready')) {
+    state.status = 'paused';
+    state.pauseReason = 'step_budget';
+    state.yieldReason = 'step_budget';
+  }
+  await save();
   return state;
 }
 
@@ -103,7 +140,7 @@ export function decide(state, { tokenId, outcome, output = null, now = new Date(
   }
   const allowed = humanOutcomes(node);
   if (!allowed.includes(outcome)) throw new RuntimeError('unknown_outcome', `expected one of ${allowed.join(', ')}`);
-  completeToken(state, token, { outcome, output });
+  completeToken(state, token, { outcome, output }, () => now);
   followEdges(state, token, outcome, () => now);
   state.updatedAt = now;
   refreshStatus(state);
@@ -129,13 +166,17 @@ export function waitingHumanTokens(state) {
   return waitingTokens(state).filter(token => humanNodes.has(token.nodeId));
 }
 
-async function executeToken(state, token, executors, now, control = null) {
+async function executeToken(state, token, executors, now, control = null, { signal, checkpoint = async () => {}, maxFailures = 3, controlReader = control } = {}) {
   const node = state.definition.nodes.find(candidate => candidate.id === token.nodeId);
   if (!node) throw new RuntimeError('unknown_node', `token ${token.id} references unknown node ${token.nodeId}`);
   token.status = 'running';
   token.attempt += 1;
   token.updatedAt = now();
+  state.currentNode = node.id;
+  // Persist the running marker BEFORE launching a child or a command.
+  await checkpoint(state);
   try {
+    signal?.throwIfAborted();
     if (node.type === 'human') {
       token.status = 'waiting';
       token.updatedAt = now();
@@ -148,7 +189,16 @@ async function executeToken(state, token, executors, now, control = null) {
         token.updatedAt = now();
         return;
       }
-      completeToken(state, token, { outcome: 'complete', output: null });
+      if (node.config.newCycle === true) {
+        const index = (state.context.cycle?.index ?? 0) + 1;
+        if (index > 1) {
+          for (const key of node.config.consumeInput ?? []) delete state.context.input[key];
+          state.context.nodes = {};
+          state.failureStreaks = {};
+        }
+        state.context.cycle = { index };
+      }
+      completeToken(state, token, { outcome: 'complete', output: null }, now);
       followEdges(state, token, 'complete', now);
       return;
     }
@@ -158,25 +208,27 @@ async function executeToken(state, token, executors, now, control = null) {
     }
     if (node.type === 'join') {
       // A join token is created by fanout and becomes ready when children arrive.
-      completeToken(state, token, { outcome: 'complete', output: token.outputs ?? [] });
+      completeToken(state, token, { outcome: 'complete', output: token.outputs ?? [] }, now);
       followEdges(state, token, 'complete', now);
       return;
     }
     if (node.type === 'subworkflow') {
       const childDefinition = node.config.definition;
-      const childInput = resolveInputs(node, state, token);
-      const child = newRunState({ definition: childDefinition, permissions: state.permissions, input: childInput, now: now() });
-      await run(child, executors, { maxSteps: 100, now, control });
+      const childInput = token.input;
+      const child = newRunState({ definition: childDefinition, permissions: state.permissions, input: childInput, cwd: state.cwd, now: now() });
+      token.childRun = child;
+      await checkpoint(state);
+      await run(child, executors, { maxSteps: 100, now, control: controlReader, signal, maxFailures, checkpoint: () => checkpoint(state) });
       if (child.status !== 'done') {
         throw new RuntimeError('subworkflow_not_done', `subworkflow ${node.id} ended as ${child.status}`);
       }
       const output = { context: child.context, tokens: child.tokens };
-      completeToken(state, token, { outcome: 'complete', output });
+      completeToken(state, token, { outcome: 'complete', output }, now);
       followEdges(state, token, 'complete', now);
       return;
     }
 
-    const input = resolveInputs(node, state, token);
+    const input = token.input;
     let result;
     if (node.type === 'agent') {
       if (!executors.agent) throw new RuntimeError('no_executor', 'no agent executor is mounted');
@@ -195,15 +247,38 @@ async function executeToken(state, token, executors, now, control = null) {
     const outcome = typeof result?.outcome === 'string' && result.outcome !== ''
       ? result.outcome
       : node.type === 'agent' ? (node.config.outcome ?? 'complete') : 'complete';
+    // Preserve failing evidence even when no repair edge exists. Count failure
+    // visits across fresh tokens, not token.attempt (which resets on each edge).
+    state.failureStreaks ??= {};
+    const failedOutcome = outcome === 'fail' || outcome === 'needs_revision';
+    state.failureStreaks[node.id] = failedOutcome ? (state.failureStreaks[node.id] || 0) + 1 : 0;
+    token.outcome = outcome;
+    token.output = result?.output ?? null;
+    token.model = result?.model ?? null;
+    const limit = Math.max(1, Number(node.config.maxFailures) || maxFailures);
+    if (failedOutcome && state.failureStreaks[node.id] >= limit) {
+      token.status = 'failed';
+      token.error = { code: 'failure_budget_exhausted', message: `Node ${node.id} failed ${limit} times without a passing verification. Inspect its command, cwd and last output before retrying.` };
+      token.updatedAt = now();
+      return;
+    }
     if (outcome === 'fail' && !state.definition.edges.some(edge => edge.from === node.id && edge.on === 'fail')) {
       token.status = 'failed';
       token.error = { code: 'unhandled_failure', message: `node ${node.id} returned fail and has no fail edge` };
       token.updatedAt = now();
       return;
     }
-    completeToken(state, token, { outcome, output: result?.output ?? null, model: result?.model ?? null });
+    completeToken(state, token, { outcome, output: result?.output ?? null, model: result?.model ?? null }, now);
     followEdges(state, token, outcome, now);
   } catch (error) {
+    if (signal?.aborted || error?.code === 'execution_aborted' || error?.name === 'AbortError') {
+      token.status = 'interrupted';
+      token.error = { code: 'execution_aborted', message: error?.message || 'Execution cancelled; inspect side effects before retrying.' };
+      token.updatedAt = now();
+      state.status = 'interrupted';
+      state.lastError = token.error.message;
+      return;
+    }
     if (error instanceof PermissionError) {
       token.status = 'failed';
       token.error = { code: error.code, message: error.message };
@@ -213,7 +288,8 @@ async function executeToken(state, token, executors, now, control = null) {
     const maxAttempts = node.type === 'agent' || node.type === 'command' || node.type === 'http'
       ? Math.max(1, Number(node.config.attempts) || 1)
       : 1;
-    if (token.attempt < maxAttempts && !(error instanceof RuntimeError && error.code === 'no_executor')) {
+    const nonRetryable = ['no_executor', 'invalid_command_cwd', 'invalid_agent_output', 'execution_timeout', 'activity_persistence_failed', 'activation_disposal_failed'];
+    if (token.attempt < maxAttempts && !nonRetryable.includes(error?.code)) {
       token.status = 'ready';
       token.error = { code: error.code ?? 'execution_failed', message: error.message ?? String(error) };
       token.updatedAt = now();
@@ -236,7 +312,7 @@ function executeFanout(state, token, node, now) {
   if (!target) throw new RuntimeError('invalid_fanout', `fanout ${node.id} target does not exist`);
   const mode = joinNode.config.mode ?? 'all';
   const threshold = mode === 'any' ? 1 : mode === 'quorum' ? Math.max(1, Number(joinNode.config.count) || 1) : resolved.length;
-  const joinToken = makeToken(joinNode, {});
+  const joinToken = makeToken(joinNode, {}, now());
   joinToken.status = 'waiting';
   joinToken.expected = resolved.length;
   joinToken.threshold = Math.min(threshold, resolved.length);
@@ -247,21 +323,21 @@ function executeFanout(state, token, node, now) {
   state.fanouts[token.id] = { joinTokenId: joinToken.id, expected: resolved.length };
   if (resolved.length === 0) joinToken.status = 'ready';
   for (const [index, item] of resolved.entries()) {
-    const child = makeToken(target, resolveInputs(target, state, token, { item, index }));
+    const child = makeToken(target, resolveInputs(target, state, token, { item, index }), now());
     child.branch = { fanoutId: token.id, joinTokenId: joinToken.id, index, item };
     child.joinTokenId = joinToken.id;
     state.tokens.push(child);
   }
-  completeToken(state, token, { outcome: 'complete', output: resolved });
+  completeToken(state, token, { outcome: 'complete', output: resolved }, now);
   followEdges(state, token, 'complete', now);
 }
 
-function completeToken(state, token, { outcome, output, model = null }) {
+function completeToken(state, token, { outcome, output, model = null }, now = () => new Date().toISOString()) {
   token.status = 'completed';
   token.outcome = outcome;
   token.output = output ?? null;
   token.model = model ?? null;
-  token.updatedAt = new Date().toISOString();
+  token.updatedAt = now();
   const node = state.definition.nodes.find(candidate => candidate.id === token.nodeId);
   state.context.nodes[node?.id ?? token.nodeId] = { outcome, output: output ?? null, model: model ?? null };
   if (token.joinTokenId) registerJoinArrival(state, token);
@@ -280,26 +356,27 @@ function followEdges(state, token, outcome, now) {
   for (const edge of edges) {
     const target = state.definition.nodes.find(candidate => candidate.id === edge.to);
     if (!target) throw new RuntimeError('unknown_node', `edge targets unknown node ${edge.to}`);
-    const next = makeToken(target, resolveInputs(target, state, token));
+    const next = makeToken(target, resolveInputs(target, state, token), now());
+    next.branch = token.branch ? structuredClone(token.branch) : null;
     state.tokens.push(next);
   }
 }
 
-function makeToken(node, input) {
+function makeToken(node, input, now = new Date().toISOString()) {
   return {
     id: `token-${randomUUID()}`,
     nodeId: node.id,
     status: 'ready',
     attempt: 0,
-    input,
+    input: structuredClone(input),
     outcome: null,
     output: null,
     model: null,
     error: null,
     branch: null,
     joinTokenId: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
@@ -364,7 +441,7 @@ function requireHttpPermission(grant, url) {
 }
 
 function refreshStatus(state) {
-  if (state.status === 'failed') return;
+  if (['failed', 'interrupted'].includes(state.status)) return;
   if (state.tokens.some(token => token.status === 'failed')) {
     state.status = 'failed';
     return;

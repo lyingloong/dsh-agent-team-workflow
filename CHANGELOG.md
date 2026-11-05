@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+- Fix the apparent startup hang: bind the effective target repository at start,
+  preflight direct npm verification, and expose cwd/current node/child/errors.
+- Dispatch session-owned DSH jobs, share one runner between tools and both API
+  transports, persist each node transition, and reject conflicting mutations.
+- Stop repeated fail/review cycles after a failure budget; step limits yield
+  instead of poisoning resumable runs. Stop/cancel no longer triggers fallback.
+- Drain every activation, add agent deadlines, and fail closed on malformed
+  multi-outcome model replies (including fenced JSON).
+- Preserve run history; fence run IDs and never replay orphan running or failed
+  work. Add explicit cycle-boundary input consumption and feedback isolation.
+- Fix control POST session handling and board run/stop state; keep note drafts
+  across polling refreshes. See docs/run-lifecycle.md for recovery semantics.
+
 ## 2.7.0
 
 - Add a `gate` node and persistent continuous-run control. When off, the gate

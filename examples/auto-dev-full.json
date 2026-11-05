@@ -7,7 +7,17 @@
     {
       "id": "gate",
       "type": "gate",
-      "title": "Continuous switch"
+      "title": "Continuous switch",
+      "config": {
+        "newCycle": true,
+        "consumeInput": [
+          "source",
+          "requirement",
+          "tags",
+          "priority",
+          "addToSeedPool"
+        ]
+      }
     },
     {
       "id": "intake",
@@ -18,11 +28,15 @@
         "source": "$input.source",
         "requirement": "$input.requirement",
         "tags": "$input.tags",
-        "priority": "$input.priority"
+        "priority": "$input.priority",
+        "cycle": "$context.cycle.index"
       },
       "config": {
-        "outcomes": ["user", "mined"],
-        "prompt": "Choose the next requirement for this continuous loop. If Input.requirement has text or Input.source is user, use that user requirement: source=user, priority=0, preserve tags. Otherwise read requirements/requirements.json and choose the first entry with status queued, preferring source=user and priority 0; use that entry and set source to its source. If there is no queued entry, source=mined and leave the requirement to the Requirement analyst. Do not edit application code. Return JSON {source, requirement:{id,title,body,tags,priority,acceptance}, rationale} and outcome user|mined."
+        "outcomes": [
+          "user",
+          "mined"
+        ],
+        "prompt": "Choose the next requirement for this continuous loop. If Input.requirement has text or Input.source is user, use that user requirement: source=user, priority=0, preserve tags. Otherwise read requirements/requirements.json and choose the first entry with status queued, preferring source=user and priority 0; use that entry and set source to its source. If there is no queued entry, source=mined and leave the requirement to the Requirement analyst. Do not edit application code. Return JSON {source, requirement:{id,title,body,tags,priority,acceptance}, rationale} and outcome user|mined. The initial request is consumed only in cycle 1; later cycles read queued records. Respect the supplied cycle index and never reprocess a done requirement."
       }
     },
     {
@@ -33,10 +47,11 @@
       "inputs": {
         "goal": "$input.goal",
         "poolPath": "$input.poolPath",
-        "feedback": "$nodes.requirement_review.output"
+        "feedback": "$nodes.requirement_review.output",
+        "intake": "$nodes.intake.output"
       },
       "config": {
-        "prompt": "You own the mined-requirement seed pool for a continuous loop. Read poolPath from Input when present, otherwise requirements/seeds.json, docs/requirements*.json or REQUIREMENTS.md. The pool is JSON: [{id,title,status,priority,tags,acceptance,body}]. If feedback is present from a rejected human requirement review, revise the previously proposed mined requirement using that feedback. Choose exactly one seed with status ready, highest priority first; if no pool exists or no ready seed remains, mine exactly one small repository improvement from the current tree. Do not edit application code. You may only update the selected seed's status to claimed and record the run id; never edit other seeds. Return JSON {seedId,poolPath,title,body,tags,acceptance,riskHints,plan}. If nothing can be mined, return {blocked:true,reason}."
+        "prompt": "You own the mined-requirement seed pool for a continuous loop. Read poolPath from Input when present, otherwise requirements/seeds.json, docs/requirements*.json or REQUIREMENTS.md. The pool is JSON: [{id,title,status,priority,tags,acceptance,body}]. If feedback is present from a rejected human requirement review, revise the previously proposed mined requirement using that feedback. Choose exactly one seed with status ready, highest priority first; if no pool exists or no ready seed remains, mine exactly one small repository improvement from the current tree. Do not edit application code. You may only update the selected seed's status to claimed and record the run id; never edit other seeds. Return JSON {seedId,poolPath,title,body,tags,acceptance,riskHints,plan}. If nothing can be mined, return {blocked:true,reason}. If Input.intake.requirement exists, refine that exact record/id rather than discard it for a different seed. Feedback must concern the same id. Do not manufacture a risk approval for an empty or blocked proposal."
       }
     },
     {
@@ -44,9 +59,15 @@
       "type": "agent",
       "title": "Assess requirement risk",
       "role": "analyst",
-      "inputs": { "requirement": "$nodes.analyst.output" },
+      "inputs": {
+        "requirement": "$nodes.analyst.output"
+      },
       "config": {
-        "outcomes": ["low", "mid", "high"],
+        "outcomes": [
+          "low",
+          "mid",
+          "high"
+        ],
         "prompt": "Classify the mined requirement's risk: low = isolated/docs-only/narrow change; mid = normal behavior change with tests; high = cross-cutting, security, data migration or uncertain scope. Return JSON {risk, tags, reasons, suggestedApproval} and the matching outcome low|mid|high. Do not edit files."
       }
     },
@@ -54,7 +75,12 @@
       "id": "requirement_review",
       "type": "human",
       "title": "Approve mined requirement",
-      "config": { "outcomes": ["approve", "reject"] }
+      "config": {
+        "outcomes": [
+          "approve",
+          "reject"
+        ]
+      }
     },
     {
       "id": "register",
@@ -77,7 +103,9 @@
       "type": "agent",
       "title": "Plan implementation",
       "role": "architect",
-      "inputs": { "requirement": "$nodes.register.output" },
+      "inputs": {
+        "requirement": "$nodes.register.output"
+      },
       "config": {
         "prompt": "Turn the recorded requirement into a concrete implementation plan. Return JSON with steps, files, risks, and a test strategy. Do not edit files."
       }
@@ -100,17 +128,22 @@
         "requirement": "$nodes.register.output",
         "plan": "$nodes.plan.output",
         "review": "$nodes.review.output",
-        "pr_review": "$nodes.pr_review.output"
+        "pr_review": "$nodes.pr_review.output",
+        "tests": "$nodes.verify.output"
       },
       "config": {
-        "prompt": "Implement the approved requirement in the current repository. Follow AGENTS.md. Do not commit, push or open a PR; command nodes handle that. Address Review feedback and PR/human review feedback, including the note field, when present. Return JSON with summary and changed paths."
+        "prompt": "Implement the approved requirement in the current repository. Follow AGENTS.md. Do not commit, push or open a PR; command nodes handle that. Address Review feedback and PR/human review feedback, including the note field, when present. Return JSON with summary and changed paths. The tests input contains the latest verification stdout/stderr and cwd. If it is a command/cwd configuration error, report it rather than repeatedly changing application code. All work must stay in the bound repository."
       }
     },
     {
       "id": "verify",
       "type": "command",
       "title": "Run tests",
-      "config": { "command": "npm test", "timeoutMs": 600000 }
+      "config": {
+        "command": "npm test",
+        "timeoutMs": 600000,
+        "maxFailures": 3
+      }
     },
     {
       "id": "review",
@@ -124,8 +157,12 @@
         "tests": "$nodes.verify.output"
       },
       "config": {
-        "outcomes": ["pass", "needs_revision"],
-        "prompt": "Review the working tree against the requirement, plan and test result. Use pass only when no required change remains. Put concrete issues in output.issues. Return JSON {\"outcome\":\"pass|needs_revision\",\"output\":...}."
+        "outcomes": [
+          "pass",
+          "needs_revision"
+        ],
+        "prompt": "Review the working tree against the requirement, plan and test result. Use pass only when no required change remains. Put concrete issues in output.issues. Return JSON {\"outcome\":\"pass|needs_revision\",\"output\":...}.",
+        "maxFailures": 3
       }
     },
     {
@@ -141,7 +178,12 @@
       "id": "pr_review",
       "type": "human",
       "title": "Human review pool",
-      "config": { "outcomes": ["approve", "reject"] }
+      "config": {
+        "outcomes": [
+          "approve",
+          "reject"
+        ]
+      }
     },
     {
       "id": "merge",
@@ -167,27 +209,115 @@
     }
   ],
   "edges": [
-    { "from": "gate", "to": "intake", "on": "complete" },
-    { "from": "intake", "to": "register", "on": "user" },
-    { "from": "intake", "to": "analyst", "on": "mined" },
-    { "from": "analyst", "to": "risk", "on": "complete" },
-    { "from": "risk", "to": "register", "on": "low" },
-    { "from": "risk", "to": "requirement_review", "on": "mid" },
-    { "from": "risk", "to": "requirement_review", "on": "high" },
-    { "from": "requirement_review", "to": "register", "on": "approve" },
-    { "from": "requirement_review", "to": "analyst", "on": "reject" },
-    { "from": "register", "to": "plan", "on": "complete" },
-    { "from": "plan", "to": "branch", "on": "complete" },
-    { "from": "branch", "to": "implement", "on": "complete" },
-    { "from": "implement", "to": "verify", "on": "complete" },
-    { "from": "verify", "to": "review", "on": "complete" },
-    { "from": "verify", "to": "implement", "on": "fail" },
-    { "from": "review", "to": "pr", "on": "pass" },
-    { "from": "review", "to": "implement", "on": "needs_revision" },
-    { "from": "pr", "to": "pr_review", "on": "complete" },
-    { "from": "pr_review", "to": "merge", "on": "approve" },
-    { "from": "pr_review", "to": "implement", "on": "reject" },
-    { "from": "merge", "to": "complete", "on": "complete" },
-    { "from": "complete", "to": "gate", "on": "complete" }
+    {
+      "from": "gate",
+      "to": "intake",
+      "on": "complete"
+    },
+    {
+      "from": "intake",
+      "to": "register",
+      "on": "user"
+    },
+    {
+      "from": "intake",
+      "to": "analyst",
+      "on": "mined"
+    },
+    {
+      "from": "analyst",
+      "to": "risk",
+      "on": "complete"
+    },
+    {
+      "from": "risk",
+      "to": "register",
+      "on": "low"
+    },
+    {
+      "from": "risk",
+      "to": "requirement_review",
+      "on": "mid"
+    },
+    {
+      "from": "risk",
+      "to": "requirement_review",
+      "on": "high"
+    },
+    {
+      "from": "requirement_review",
+      "to": "register",
+      "on": "approve"
+    },
+    {
+      "from": "requirement_review",
+      "to": "analyst",
+      "on": "reject"
+    },
+    {
+      "from": "register",
+      "to": "plan",
+      "on": "complete"
+    },
+    {
+      "from": "plan",
+      "to": "branch",
+      "on": "complete"
+    },
+    {
+      "from": "branch",
+      "to": "implement",
+      "on": "complete"
+    },
+    {
+      "from": "implement",
+      "to": "verify",
+      "on": "complete"
+    },
+    {
+      "from": "verify",
+      "to": "review",
+      "on": "complete"
+    },
+    {
+      "from": "verify",
+      "to": "implement",
+      "on": "fail"
+    },
+    {
+      "from": "review",
+      "to": "pr",
+      "on": "pass"
+    },
+    {
+      "from": "review",
+      "to": "implement",
+      "on": "needs_revision"
+    },
+    {
+      "from": "pr",
+      "to": "pr_review",
+      "on": "complete"
+    },
+    {
+      "from": "pr_review",
+      "to": "merge",
+      "on": "approve"
+    },
+    {
+      "from": "pr_review",
+      "to": "implement",
+      "on": "reject"
+    },
+    {
+      "from": "merge",
+      "to": "complete",
+      "on": "complete"
+    },
+    {
+      "from": "complete",
+      "to": "gate",
+      "on": "complete"
+    }
   ]
 }

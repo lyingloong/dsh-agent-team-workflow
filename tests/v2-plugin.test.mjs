@@ -1,14 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import { apply } from '../src/v2/plugin.mjs';
 import { createExecutors } from '../src/v2/executors.mjs';
+import { fakeJobs } from './helpers/jobs.mjs';
 
 function setup(t, { subagents = null } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'workflow-v2-plugin-'));
+  mkdirSync(path.join(dir, 'sub'));
+  const jobs = fakeJobs();
   const tools = new Map();
   const sections = [];
   const ctx = {
@@ -28,17 +31,25 @@ function setup(t, { subagents = null } = {}) {
     },
     get(name) {
       if (name === 'subagents') return subagents;
+      if (name === 'jobs') return jobs;
+      if (name === 'workingDirectory') return { ensure: async () => dir };
       return undefined;
     },
   };
-  apply(ctx, { dataDir: path.join(dir, '.data') });
+  const mounted = apply(ctx, { dataDir: path.join(dir, '.data') });
   const exec = { agent: { id: 'session-v2', session: { header: { cwd: dir } } }, signal: new AbortController().signal };
   const call = async (name, args = {}) => {
     const tool = tools.get(name);
     assert.ok(tool, `${name} is registered`);
-    return tool.execute(args, exec);
+    const result = await tool.execute(args, exec);
+    // These legacy scenario assertions collect the separately tested job receipt.
+    if (name === 'team_workflow_run' && result.jobId) {
+      await jobs.settle(result.jobId);
+      return (await tools.get('team_workflow_status').execute({ runId: result.runId }, exec)).run;
+    }
+    return result;
   };
-  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 }));
+  t.after(async () => { await mounted.runner.dispose(); rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 }); });
   return { dir, tools, sections, call, exec };
 }
 
@@ -98,7 +109,7 @@ test('define, start, wait at human, decide, run to completion', async (t) => {
   assert.equal(calls.length, 1);
   assert.match(calls[0].request.prompt[0].text, /build/);
   assert.deepEqual(calls[0].request.agentOptions, { provider: 'provider-a', model: 'model-1' });
-  assert.equal(calls[0].request.cwd, path.resolve(dir, 'sub'));
+  assert.equal(calls[0].request.cwd, path.resolve(started.cwd, 'sub'));
 });
 
 test('command nodes run only with a permission grant', async (t) => {
@@ -151,7 +162,7 @@ test('status reports no run before start and rejects malformed definitions', asy
   assert.match(rejected.errors[0].path, /nodes/);
 });
 
-test('redefining a workflow clears the previous run', async (t) => {
+test('redefining a workflow preserves the previous run as evidence', async (t) => {
   const { call } = setup(t);
   await call('team_workflow_define', { definition: HUMAN_AGENT });
   await call('team_workflow_start', { input: { task: 'build' } });
@@ -159,7 +170,8 @@ test('redefining a workflow clears the previous run', async (t) => {
   assert.notEqual(before.run.status, 'none');
   await call('team_workflow_define', { definition: HUMAN_AGENT });
   const after = await call('team_workflow_status', {});
-  assert.equal(after.run.status, 'none');
+  assert.equal(after.run.runId, before.run.runId);
+  assert.equal(after.run.status, before.run.status);
 });
 
 test('fan-out run reports only human decisions and reaches done', async (t) => {
@@ -247,4 +259,18 @@ test('agent nodes fall back through their ordered model list', async () => {
   assert.equal(calls[1].request.agentOptions.provider, 'provider-b');
   assert.deepEqual(result.model, { provider: 'provider-b', model: 'model-2' });
   assert.deepEqual(result.output, { ok: true });
+});
+
+
+test('run tool summary fields match its strict output schema',async t=>{
+  const {tools,call}=setup(t);
+  await call('team_workflow_define',{definition:HUMAN_AGENT});
+  await call('team_workflow_start',{input:{task:'schema'}});
+  const summary=await call('team_workflow_run');
+  const schema=tools.get('team_workflow_run').output.schema;
+  assert.equal(schema.additionalProperties,false);
+  for(const key of Object.keys(summary)) assert.ok(Object.hasOwn(schema.properties,key),'undeclared output: '+key);
+  assert.ok(summary.cwd);assert.ok(summary.jobId);
+  assert.equal(typeof summary.pauseReason, 'string');
+  for (const value of Object.values(schema.properties)) assert.ok(!Array.isArray(value.type), 'DSH requires a single schema.type string');
 });

@@ -1,9 +1,9 @@
 /**
  * v2 Web API for the node/run board.
  *
- * Routes are session-scoped and use the same JSON store as the tools. The run
- * route executes nodes with the last Agent object observed for that session, so
- * a board button can continue a run after a human decision.
+ * Routes are session-scoped and share the tools' execution owner and JSON store.
+ * Run requests dispatch managed jobs; polling reads their persisted checkpoints.
+ * Board mutations cannot overwrite an active run's state.
  */
 
 import path from 'node:path';
@@ -13,16 +13,16 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { normalizeDefinition } from './definition.mjs';
 import { SessionStore } from './store.mjs';
-import { DEFAULT_PERMISSIONS, decide, newRunState, run } from './runtime.mjs';
+import { DEFAULT_PERMISSIONS, decide, newRunState } from './runtime.mjs';
 import { panelState } from './view.mjs';
-import { createExecutors } from './executors.mjs';
+import { WorkflowRunner, executionCwd, preflightRun } from './runner.mjs';
 
 export const ROUTE_PREFIX = '/plugins/dsh-agent-team-workflow';
 const MAX_BODY_BYTES = 64 * 1024;
 const SESSION_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
 const BOARD_HTML = readFileSync(new URL('./board.html', import.meta.url), 'utf8');
 
-export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = console }) {
+export function installWebApi({ ctx, dataRoot, agents = new Map(), settings = {}, logger = console, runner = null }) {
   const root = path.resolve(dataRoot);
   const stores = new Map();
   const routes = new Map();
@@ -36,6 +36,8 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     if (!stores.has(session)) stores.set(session, new SessionStore(path.join(root, 'sessions', session)));
     return stores.get(session);
   };
+  const ownsRunner = runner === null;
+  runner ??= new WorkflowRunner({ ctx, storeFor, agents, settings: { subagentProvider: 'spawn', ...settings }, logger });
 
   const guard = handler => async (req, res) => {
     try {
@@ -72,10 +74,9 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     return store.latestRun();
   };
 
-  const readQueue = async session => {
-    const exec = agents.get(session);
-    const cwd = exec?.agent?.session?.header?.cwd;
-    if (typeof cwd !== 'string' || cwd === '') return null;
+  const readQueue = async state => {
+    const cwd = state?.cwd;
+    if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) return null;
     const base = path.join(cwd, 'requirements');
     const read = async name => {
       try { return JSON.parse(await readFile(path.join(base, name), 'utf8')); } catch { return null; }
@@ -100,6 +101,123 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     };
   };
 
+  const apiError = (status, code, message) => Object.assign(new Error(message), { status, code });
+  const requestSession = (url, body = null) => {
+    const query = url.searchParams.get('session');
+    if (query !== null && body?.session !== undefined && query !== body.session) {
+      throw apiError(400, 'invalid_session', 'body.session and query.session must match');
+    }
+    const session = body?.session ?? query;
+    storeFor(session);
+    return session;
+  };
+  const requestBody = async req => {
+    if (req.method !== 'POST') throw apiError(405, 'method_not_allowed', 'this operation requires POST');
+    const body = await readJson(req);
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+      throw apiError(400, 'invalid_json', 'request body must be a JSON object');
+    }
+    return body;
+  };
+  const requireWorkflow = async store => {
+    const stored = await store.loadDefinition();
+    if (!stored) throw apiError(409, 'no_workflow', 'no workflow defined');
+    return stored;
+  };
+  const changeModel = async (req, res, url) => {
+    const body = await requestBody(req);
+    const session = requestSession(url, body);
+    const { definition, permissions, state } = await runner.mutate(session, async () => {
+      const store = storeFor(session);
+      const stored = await requireWorkflow(store);
+      const nodeId = requireText(body.nodeId, 'nodeId');
+      const node = stored.definition.nodes.find(candidate => candidate.id === nodeId);
+      if (!node) throw apiError(404, 'no_node', `unknown node ${nodeId}`);
+      if (node.type !== 'agent') throw apiError(400, 'not_model_node', `node ${nodeId} does not use a model`);
+      const provider = optionalText(body.provider);
+      const model = optionalText(body.model);
+      const models = readModels(body.models);
+      if (models === null && (provider === null) !== (model === null)) {
+        throw apiError(400, 'invalid_model', 'provider and model must be set or cleared together');
+      }
+      const definition = normalizeDefinition({
+        ...stored.definition,
+        nodes: stored.definition.nodes.map(candidate => candidate.id !== nodeId ? candidate : {
+          ...candidate, config: updatedModelConfig(candidate.config, { models, provider, model }),
+        }),
+      });
+      const state = await loadState(store, body.runId);
+      if (state) {
+        const target = state.definition.nodes.find(candidate => candidate.id === nodeId);
+        if (target) target.config = updatedModelConfig(target.config, { models, provider, model });
+      }
+      await store.saveDefinition({ definition, permissions: stored.permissions });
+      if (state) await store.saveRun(state);
+      return { definition, permissions: stored.permissions, state };
+    });
+    sendJson(res, 200, { ...panelState({ definition, permissions }, state), models: await readModelCatalog(ctx, definition) });
+  };
+  const startRun = async (req, res, url) => {
+    const body = await requestBody(req);
+    const session = requestSession(url, body);
+    const result = await runner.mutate(session, async () => {
+      const store = storeFor(session);
+      const stored = await requireWorkflow(store);
+      const previous = await store.latestRun();
+      if (previous && !['done', 'failed', 'interrupted'].includes(previous.status)) {
+        throw apiError(409, 'unfinished_run', 'An unfinished run already exists. Continue or inspect it instead of creating a duplicate.');
+      }
+      const exec = body.cwd === undefined || body.cwd === null ? { agent: runner.parent(session) } : {};
+      const cwd = await executionCwd(ctx, exec, body.cwd);
+      const state = newRunState({
+        definition: stored.definition,
+        permissions: stored.permissions ?? DEFAULT_PERMISSIONS,
+        input: body.input !== null && typeof body.input === 'object' ? body.input : {},
+        cwd,
+      });
+      await preflightRun(state);
+      await store.saveRun(state);
+      return panelState(stored, state);
+    });
+    sendJson(res, 201, result);
+  };
+  const decideRun = async (req, res, url) => {
+    const body = await requestBody(req);
+    const session = requestSession(url, body);
+    const result = await runner.mutate(session, async () => {
+      const store = storeFor(session);
+      const stored = await requireWorkflow(store);
+      const state = await runner.load(session, body.runId);
+      decide(state, { tokenId: requireText(body.tokenId, 'tokenId'), outcome: requireText(body.outcome, 'outcome'), output: body.output ?? null });
+      await store.saveRun(state);
+      return panelState(stored, state);
+    });
+    sendJson(res, 200, result);
+  };
+  const dispatchRun = async (req, res, url) => {
+    const body = await requestBody(req);
+    const session = requestSession(url, body);
+    const stored = await requireWorkflow(storeFor(session));
+    const state = await runner.dispatch(session, body.runId);
+    sendJson(res, state.execution?.active ? 202 : 200, { ...panelState(stored, state), execution: state.execution ?? null });
+  };
+  const stopRun = async (req, res, url) => {
+    const body = await requestBody(req);
+    const session = requestSession(url, body);
+    const result = await runner.stop(session);
+    sendJson(res, result.requested ? 202 : 200, result);
+  };
+  const changeControl = async (req, res, url) => {
+    if (req.method === 'GET') {
+      const store = storeFor(requestSession(url));
+      return sendJson(res, 200, { control: await store.loadControl() });
+    }
+    const body = await requestBody(req);
+    const store = storeFor(requestSession(url, body));
+    const control = await store.saveControl({ continuous: body.continuous !== false });
+    sendJson(res, 200, { control });
+  };
+
   route('/board', async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://local');
     storeFor(url.searchParams.get('session'));
@@ -117,17 +235,10 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     const store = storeFor(session);
     const stored = await store.loadDefinition();
     const state = await loadState(store, url.searchParams.get('runId'));
-    sendJson(res, 200, { ...panelState(stored, state), control: await store.loadControl(), queue: await readQueue(session) });
+    sendJson(res, 200, { ...panelState(stored, state), control: await store.loadControl(), queue: await readQueue(state) });
   });
 
-  route('/api/control', async (req, res) => {
-    const url = new URL(req.url ?? '/', 'http://local');
-    const store = storeFor(url.searchParams.get('session'));
-    if (req.method === 'GET') return sendJson(res, 200, { control: await store.loadControl() });
-    const body = await readJson(req);
-    const control = await store.saveControl({ continuous: body.continuous !== false });
-    sendJson(res, 200, { control });
-  });
+  route('/api/control', (req, res) => changeControl(req, res, new URL(req.url ?? '/', 'http://local')));
 
   route('/api/models', async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://local');
@@ -142,46 +253,7 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     sendJson(res, 200, { url: base ? (boardUrl(url.searchParams.get('session')) ?? '') : '' });
   });
 
-  route('/api/node-model', async (req, res) => {
-    const body = await readJson(req);
-    const store = storeFor(body.session);
-    const stored = await store.loadDefinition();
-    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
-    const nodeId = requireText(body.nodeId, 'nodeId');
-    const node = stored.definition.nodes.find(candidate => candidate.id === nodeId);
-    if (!node) return sendJson(res, 404, { error: { code: 'no_node', message: `unknown node ${nodeId}` } });
-    if (node.type !== 'agent') {
-      return sendJson(res, 400, { error: { code: 'not_model_node', message: `node ${nodeId} does not use a model` } });
-    }
-    const provider = optionalText(body.provider);
-    const model = optionalText(body.model);
-    const models = readModels(body.models);
-    if (models === null && (provider === null) !== (model === null)) {
-      return sendJson(res, 400, { error: { code: 'invalid_model', message: 'provider and model must be set or cleared together' } });
-    }
-    let definition;
-    try {
-      definition = normalizeDefinition({
-        ...stored.definition,
-        nodes: stored.definition.nodes.map(candidate => {
-          if (candidate.id !== nodeId) return candidate;
-          return { ...candidate, config: updatedModelConfig(candidate.config, { models, provider, model }) };
-        }),
-      });
-    } catch (error) {
-      return sendJson(res, 400, { error: { code: error.code ?? 'invalid_definition', message: error.message } });
-    }
-    await store.saveDefinition({ definition, permissions: stored.permissions });
-    let state = await loadState(store, body.runId);
-    if (state) {
-      const target = state.definition.nodes.find(candidate => candidate.id === nodeId);
-      if (target) {
-        target.config = updatedModelConfig(target.config, { models, provider, model });
-        await store.saveRun(state);
-      }
-    }
-    sendJson(res, 200, { ...panelState({ definition, permissions: stored.permissions }, state), models: await readModelCatalog(ctx, definition) });
-  });
+  route('/api/node-model', (req, res) => changeModel(req, res, new URL(req.url ?? '/', 'http://local')));
 
   routePublic('/public/api/models', async (req, res) => {
     const url = authorizePublic(req);
@@ -190,103 +262,12 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     sendJson(res, 200, await readModelCatalog(ctx, stored?.definition));
   });
 
-  routePublic('/public/api/node-model', async (req, res) => {
-    authorizePublic(req);
-    const body = await readJson(req);
-    const store = storeFor(body.session);
-    const stored = await store.loadDefinition();
-    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
-    const nodeId = requireText(body.nodeId, 'nodeId');
-    const node = stored.definition.nodes.find(candidate => candidate.id === nodeId);
-    if (!node) return sendJson(res, 404, { error: { code: 'no_node', message: `unknown node ${nodeId}` } });
-    if (node.type !== 'agent') {
-      return sendJson(res, 400, { error: { code: 'not_model_node', message: `node ${nodeId} does not use a model` } });
-    }
-    const provider = optionalText(body.provider);
-    const model = optionalText(body.model);
-    const models = readModels(body.models);
-    if (models === null && (provider === null) !== (model === null)) {
-      return sendJson(res, 400, { error: { code: 'invalid_model', message: 'provider and model must be set or cleared together' } });
-    }
-    let definition;
-    try {
-      definition = normalizeDefinition({
-        ...stored.definition,
-        nodes: stored.definition.nodes.map(candidate => {
-          if (candidate.id !== nodeId) return candidate;
-          return { ...candidate, config: updatedModelConfig(candidate.config, { models, provider, model }) };
-        }),
-      });
-    } catch (error) {
-      return sendJson(res, 400, { error: { code: error.code ?? 'invalid_definition', message: error.message } });
-    }
-    await store.saveDefinition({ definition, permissions: stored.permissions });
-    let state = await loadState(store, body.runId);
-    if (state) {
-      const target = state.definition.nodes.find(candidate => candidate.id === nodeId);
-      if (target) {
-        target.config = updatedModelConfig(target.config, { models, provider, model });
-        await store.saveRun(state);
-      }
-    }
-    sendJson(res, 200, { ...panelState({ definition, permissions: stored.permissions }, state), models: await readModelCatalog(ctx, definition) });
-  });
+  routePublic('/public/api/node-model', (req, res) => changeModel(req, res, authorizePublic(req)));
 
-  route('/api/start', async (req, res) => {    const body = await readJson(req);
-    const store = storeFor(body.session);
-    const stored = await store.loadDefinition();
-    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
-    const state = newRunState({
-      definition: stored.definition,
-      permissions: stored.permissions ?? DEFAULT_PERMISSIONS,
-      input: body.input !== null && typeof body.input === 'object' ? body.input : {},
-    });
-    await store.saveRun(state);
-    sendJson(res, 201, panelState(stored, state));
-  });
-
-  route('/api/decide', async (req, res) => {
-    const body = await readJson(req);
-    const store = storeFor(body.session);
-    const stored = await store.loadDefinition();
-    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
-    const state = await loadState(store, body.runId);
-    if (!state) return sendJson(res, 409, { error: { code: 'no_run', message: 'no run exists' } });
-    decide(state, { tokenId: requireText(body.tokenId, 'tokenId'), outcome: requireText(body.outcome, 'outcome'), output: body.output ?? null });
-    await store.saveRun(state);
-    sendJson(res, 200, panelState(stored, state));
-  });
-
-  route('/api/run', async (req, res) => {
-    const body = await readJson(req);
-    const session = body.session;
-    const store = storeFor(session);
-    const stored = await store.loadDefinition();
-    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
-    const agentExec = agents.get(session);
-    if (!agentExec) {
-      return sendJson(res, 409, { error: { code: 'no_session_agent', message: 'run once from the assistant session first' } });
-    }
-    const state = await loadState(store, body.runId);
-    if (!state) return sendJson(res, 409, { error: { code: 'no_run', message: 'no run exists' } });
-    const exec = { ...agentExec, signal: new AbortController().signal };
-    const executors = createExecutors({
-      ctx,
-      exec,
-      settings: { subagentProvider: settings.subagentProvider ?? 'spawn' },
-      cwd: agentExec.agent?.session?.header?.cwd ?? process.cwd(),
-    });
-    const control = await store.loadControl();
-    try {
-      await run(state, executors, { maxSteps: settings.maxSteps ?? 40, control });
-    } catch (error) {
-      state.status = 'failed';
-      state.lastError = error.message;
-      logger.warn?.(`dsh-agent-team-workflow: board run failed: ${error.message}`);
-    }
-    await store.saveRun(state);
-    sendJson(res, 200, panelState(stored, state));
-  });
+  route('/api/start', (req, res) => startRun(req, res, new URL(req.url ?? '/', 'http://local')));
+  route('/api/decide', (req, res) => decideRun(req, res, new URL(req.url ?? '/', 'http://local')));
+  route('/api/run', (req, res) => dispatchRun(req, res, new URL(req.url ?? '/', 'http://local')));
+  route('/api/stop', (req, res) => stopRun(req, res, new URL(req.url ?? '/', 'http://local')));
 
   // Token-protected loopback routes for the native Browser sidebar tab. They
   // intentionally skip the DSH Connection fence so a different localhost origin
@@ -308,85 +289,24 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     const store = storeFor(session);
     const stored = await store.loadDefinition();
     const state = await loadState(store, url.searchParams.get('runId'));
-    sendJson(res, 200, { ...panelState(stored, state), control: await store.loadControl(), queue: await readQueue(session) });
+    sendJson(res, 200, { ...panelState(stored, state), control: await store.loadControl(), queue: await readQueue(state) });
   });
 
-  routePublic('/public/api/control', async (req, res) => {
-    const url = authorizePublic(req);
-    const store = storeFor(url.searchParams.get('session'));
-    if (req.method === 'GET') return sendJson(res, 200, { control: await store.loadControl() });
-    const body = await readJson(req);
-    const control = await store.saveControl({ continuous: body.continuous !== false });
-    sendJson(res, 200, { control });
-  });
+  routePublic('/public/api/control', (req, res) => changeControl(req, res, authorizePublic(req)));
 
-  routePublic('/public/api/start', async (req, res) => {
-    authorizePublic(req);
-    const body = await readJson(req);
-    const store = storeFor(body.session);
-    const stored = await store.loadDefinition();
-    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
-    const state = newRunState({
-      definition: stored.definition,
-      permissions: stored.permissions ?? DEFAULT_PERMISSIONS,
-      input: body.input !== null && typeof body.input === 'object' ? body.input : {},
-    });
-    await store.saveRun(state);
-    sendJson(res, 201, panelState(stored, state));
-  });
-
-  routePublic('/public/api/decide', async (req, res) => {
-    authorizePublic(req);
-    const body = await readJson(req);
-    const store = storeFor(body.session);
-    const stored = await store.loadDefinition();
-    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
-    const state = await loadState(store, body.runId);
-    if (!state) return sendJson(res, 409, { error: { code: 'no_run', message: 'no run exists' } });
-    decide(state, { tokenId: requireText(body.tokenId, 'tokenId'), outcome: requireText(body.outcome, 'outcome'), output: body.output ?? null });
-    await store.saveRun(state);
-    sendJson(res, 200, panelState(stored, state));
-  });
-
-  routePublic('/public/api/run', async (req, res) => {
-    authorizePublic(req);
-    const body = await readJson(req);
-    const session = body.session;
-    const store = storeFor(session);
-    const stored = await store.loadDefinition();
-    if (!stored) return sendJson(res, 409, { error: { code: 'no_workflow', message: 'no workflow defined' } });
-    const agentExec = agents.get(session);
-    if (!agentExec) {
-      return sendJson(res, 409, { error: { code: 'no_session_agent', message: 'run once from the assistant session first' } });
-    }
-    const state = await loadState(store, body.runId);
-    if (!state) return sendJson(res, 409, { error: { code: 'no_run', message: 'no run exists' } });
-    const exec = { ...agentExec, signal: new AbortController().signal };
-    const executors = createExecutors({
-      ctx,
-      exec,
-      settings: { subagentProvider: settings.subagentProvider ?? 'spawn' },
-      cwd: agentExec.agent?.session?.header?.cwd ?? process.cwd(),
-    });
-    const control = await store.loadControl();
-    try {
-      await run(state, executors, { maxSteps: settings.maxSteps ?? 40, control });
-    } catch (error) {
-      state.status = 'failed';
-      state.lastError = error.message;
-      logger.warn?.(`dsh-agent-team-workflow: public board run failed: ${error.message}`);
-    }
-    await store.saveRun(state);
-    sendJson(res, 200, panelState(stored, state));
-  });
+  routePublic('/public/api/start', (req, res) => startRun(req, res, authorizePublic(req)));
+  routePublic('/public/api/decide', (req, res) => decideRun(req, res, authorizePublic(req)));
+  routePublic('/public/api/run', (req, res) => dispatchRun(req, res, authorizePublic(req)));
+  routePublic('/public/api/stop', (req, res) => stopRun(req, res, authorizePublic(req)));
 
   let attached = false;
-  const closeBoardServer = () => {
+  const closeBoardServer = async () => {
     const server = boardServer;
     boardServer = null;
     boardBase = '';
     resolveBoardReady(null);
     if (server) server.close();
+    if (ownsRunner) await runner.dispose();
   };
   const startBoardServer = () => {
     if (boardServer) return;
@@ -463,7 +383,7 @@ export function installWebApi({ ctx, dataRoot, agents, settings = {}, logger = c
     });
   }
 
-  return { routes, publicRoutes, attach, boardUrl, boardReady, closeBoardServer, publicToken };
+  return { routes, publicRoutes, attach, boardUrl, boardReady, closeBoardServer, publicToken, runner };
 }
 
 async function readModelCatalog(ctx, definition) {

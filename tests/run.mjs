@@ -10,3 +10,9 @@ import './v2-plugin.test.mjs';
 import './v2-web-api.test.mjs';
 import './client-bundle.test.mjs';
 import './examples.test.mjs';
+
+import './v2-executors-lifecycle.test.mjs';
+import './v2-runtime-safety.test.mjs';
+import './v2-runner.test.mjs';
+import './v2-api-lifecycle.test.mjs';
+import './v2-board-status.test.mjs';

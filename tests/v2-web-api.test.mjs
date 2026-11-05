@@ -1,3 +1,4 @@
+import { fakeJobs } from './helpers/jobs.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -46,11 +47,14 @@ function setup(t) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'workflow-v2-api-'));
   const dataRoot = path.join(dir, '.data');
   const routes = new Map();
+  const jobs = fakeJobs();
   const agents = new Map();
   const exec = { agent: { id: SESSION, session: { header: { cwd: dir } } }, signal: new AbortController().signal };
   agents.set(SESSION, exec);
   const ctx = {
     get(name) {
+      if (name === 'jobs') return jobs;
+      if (name === 'workingDirectory') return { ensure: async () => dir };
       if (name === 'webServer') {
         return {
           getOrigin: () => 'http://127.0.0.1:1234',
@@ -87,7 +91,13 @@ function setup(t) {
   const store = new SessionStore(path.join(dataRoot, 'sessions', SESSION));
   t.after(() => api.closeBoardServer());
   t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 }));
-  return { routes, store, api };
+  const drive = async options => {
+    const accepted = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/run'), options);
+    assert.equal(accepted.status, 202, JSON.stringify(accepted.json));
+    await jobs.settle(accepted.json.run.jobId);
+    return invoke(routes.get('/plugins/dsh-agent-team-workflow/api/state'), {url: '/plugins/dsh-agent-team-workflow/api/state?session=' + SESSION});
+  };
+  return { routes, store, api, jobs, drive };
 }
 
 function response() {
@@ -131,7 +141,7 @@ async function invokeRaw(handler, { method = 'GET', url } = {}) {
 }
 
 test('v2 web API supports state, start, decide and run', async (t) => {
-  const { routes, store } = setup(t);
+  const { routes, store, drive } = setup(t);
   assert.deepEqual([...routes.keys()].sort(), [
     '/plugins/dsh-agent-team-workflow/api/board-url',
     '/plugins/dsh-agent-team-workflow/api/control',
@@ -141,6 +151,7 @@ test('v2 web API supports state, start, decide and run', async (t) => {
     '/plugins/dsh-agent-team-workflow/api/run',
     '/plugins/dsh-agent-team-workflow/api/start',
     '/plugins/dsh-agent-team-workflow/api/state',
+    '/plugins/dsh-agent-team-workflow/api/stop',
     '/plugins/dsh-agent-team-workflow/board',
   ]);
   await store.saveDefinition({ definition: FLOW, permissions: { command: { mode: 'full', allow: [] } } });
@@ -160,7 +171,7 @@ test('v2 web API supports state, start, decide and run', async (t) => {
   assert.equal(started.status, 201);
   assert.equal(started.json.run.status, 'running');
 
-  const waiting = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/run'), {
+  const waiting = await drive({
     method: 'POST',
     url: '/plugins/dsh-agent-team-workflow/api/run',
     body: { session: SESSION, runId: started.json.run.runId },
@@ -176,7 +187,7 @@ test('v2 web API supports state, start, decide and run', async (t) => {
   });
   assert.equal(decided.status, 200);
 
-  const done = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/run'), {
+  const done = await drive({
     method: 'POST',
     url: '/plugins/dsh-agent-team-workflow/api/run',
     body: { session: SESSION, runId: started.json.run.runId },
@@ -186,7 +197,7 @@ test('v2 web API supports state, start, decide and run', async (t) => {
 });
 
 test('v2 web API lists host models and updates an agent node model', async (t) => {
-  const { routes, store } = setup(t);
+  const { routes, store, drive } = setup(t);
   await store.saveDefinition({ definition: MODEL_FLOW, permissions: {} });
   const started = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/start'), {
     method: 'POST',
@@ -243,7 +254,7 @@ test('v2 web API lists host models and updates an agent node model', async (t) =
 });
 
 test('web API panel state excludes internal join waits', async (t) => {
-  const { routes, store } = setup(t);
+  const { routes, store, drive } = setup(t);
   await store.saveDefinition({ definition: FANOUT_FLOW, permissions: {} });
   const started = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/start'), {
     method: 'POST',
@@ -253,7 +264,7 @@ test('web API panel state excludes internal join waits', async (t) => {
   assert.equal(started.status, 201);
   const runId = started.json.run.runId;
 
-  const waiting = await invoke(routes.get('/plugins/dsh-agent-team-workflow/api/run'), {
+  const waiting = await drive({
     method: 'POST',
     url: '/plugins/dsh-agent-team-workflow/api/run',
     body: { session: SESSION, runId },

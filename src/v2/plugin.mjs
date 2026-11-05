@@ -10,9 +10,9 @@ import path from 'node:path';
 import os from 'node:os';
 
 import { DefinitionError, describeDefinition, normalizeDefinition } from './definition.mjs';
-import { DEFAULT_PERMISSIONS, decide, newRunState, normalizePermissions, run } from './runtime.mjs';
+import { DEFAULT_PERMISSIONS, decide, newRunState, normalizePermissions } from './runtime.mjs';
 import { SessionStore } from './store.mjs';
-import { createExecutors } from './executors.mjs';
+import { WorkflowRunner, executionCwd, preflightRun } from './runner.mjs';
 import { summarizeRun } from './view.mjs';
 import { installWebApi } from './web-api.mjs';
 
@@ -24,18 +24,20 @@ const DEFAULT_CONFIG = {
   subagentProvider: 'spawn',
   promptSectionOrder: 118,
   maxSteps: 40,
+  agentTimeoutMs: 600_000,
+  maxFailures: 3,
 };
 
 const USAGE = `Agent Team Workflow v2 is a node-graph workflow engine.
 
 A workflow is nodes plus edges. Node types:
-- agent: a model subagent. Config: prompt?, lane?, provider?, model?, models?, cwd?, outcome?, outcomes?; optional role label. The models array is an ordered fallback list.
+- agent: a model subagent. Config: prompt?, lane?, provider?, model?, models?, cwd?, timeoutMs?, maxFailures?, outcome?, outcomes?; optional role label. The models array is an ordered fallback list.
 - command: a shell command. Config: command, cwd?, timeoutMs?. Requires a command permission grant.
 - http: an HTTP request. Config: url, method?, headers?, body?, timeoutMs?. Requires an HTTP grant.
 - human: waits for a decision. Config: title?, outcomes? (default approve/reject).
 - fanout: creates one branch per item. Config: items (path), target (node id), join (join node id).
 - join: aggregates branches; its wait is internal, not a human decision. Config: mode all|any|quorum, count?.
-- gate: continuous-run switch. Passes when the session control is on; otherwise waits while the queue accumulates.
+- gate: switch/cycle boundary. Pauses when control is off. Optional newCycle resets per-item node results; consumeInput names initial-request keys consumed after the first cycle.
 - subworkflow: runs an inline nested definition. Config: definition.
 
 Inputs map values from "$input", "$nodes.<id>.output", "$item", "$index" or "$context".
@@ -52,30 +54,32 @@ or use only agent/human/fanout/join nodes.
 
 Tools:
 - team_workflow_define: validate and store the definition + permission grant.
-- team_workflow_start: create a run with an input object.
-- team_workflow_run: execute ready nodes until the run waits or finishes.
+- team_workflow_start: bind an absolute repository cwd and input, then preflight without execution.
+- team_workflow_run: dispatch a managed job and return its id. Use status/job_output for progress and job_kill to cancel; do not busy-poll.
 - team_workflow_decide: resolve a waiting human node with an outcome.
-- team_workflow_status: show definition/run summary and waiting human decisions.`;
+- team_workflow_status: show cwd, active job/node, execution progress and waiting human decisions.
+An interrupted/failed node may already have side effects. Inspect them before starting a new run.`;
 
 export function apply(ctx, config = {}) {
   const settings = resolveSettings(config);
   const stores = new Map();
   const agents = new Map();
-  const remember = exec => agents.set(sessionIdOf(exec), exec);
+  const remember = exec => agents.set(sessionIdOf(exec), { agent: exec.agent });
 
   const sessionIdOf = exec => {
     const id = exec?.agent?.id;
     return typeof id === 'string' && id !== '' ? id : 'local';
   };
-  const cwdOf = exec => exec?.agent?.session?.header?.cwd ?? process.cwd();
-  const storeFor = exec => {
-    const sessionId = sessionIdOf(exec);
+  const storeForSession = sessionId => {
     if (!stores.has(sessionId)) {
       const root = settings.dataDir ?? defaultDataDir();
       stores.set(sessionId, new SessionStore(path.join(root, 'sessions', sessionId)));
     }
     return stores.get(sessionId);
   };
+  const storeFor = exec => storeForSession(sessionIdOf(exec));
+  const runner = new WorkflowRunner({ ctx, storeFor: storeForSession, agents, settings });
+  ctx.effect?.(() => () => runner.dispose(), 'dsh-agent-team-workflow: execution owner');
 
   const mount = tool => register(ctx, {
     ...tool,
@@ -85,19 +89,19 @@ export function apply(ctx, config = {}) {
     },
   }, 'dsh-agent-team-workflow: ' + tool.name);
 
-  const webApi = installWebApi({ ctx, dataRoot: settings.dataDir ?? defaultDataDir(), agents, settings, logger: console });
+  const webApi = installWebApi({ ctx, dataRoot: settings.dataDir ?? defaultDataDir(), agents, settings, runner, logger: console });
 
-  mount(toolDefine({ storeFor }));
-  mount(toolStart({ storeFor }));
-  mount(toolRun({ storeFor, ctx, settings, cwdOf }));
-  mount(toolDecide({ storeFor }));
+  mount(toolDefine({ storeFor, runner, sessionIdOf }));
+  mount(toolStart({ storeFor, runner, sessionIdOf, ctx }));
+  mount(toolRun({ runner, sessionIdOf }));
+  mount(toolDecide({ storeFor, runner, sessionIdOf }));
   mount(toolStatus({ storeFor, ctx, boardUrl: webApi.boardUrl }));
 
   if (ctx.systemPrompt && typeof ctx.systemPrompt.section === 'function') {
     ctx.systemPrompt.section({ name: 'dsh-agent-team-workflow:usage', order: settings.promptSectionOrder, text: USAGE });
   }
 
-  return { settings };
+  return { settings, runner };
 }
 
 function register(ctx, tool, label) {
@@ -106,7 +110,7 @@ function register(ctx, tool, label) {
   else mount();
 }
 
-function toolDefine({ storeFor }) {
+function toolDefine({ storeFor, runner, sessionIdOf }) {
   return {
     name: 'team_workflow_define',
     description: 'Validate and store a v2 node-graph workflow definition for this session, together with the permission grant the user approved. Ask the user before granting command/http access; default deny.',
@@ -145,8 +149,7 @@ function toolDefine({ storeFor }) {
       }
       const permissions = normalizePermissions(args?.permissions);
       const store = storeFor(exec);
-      await store.saveDefinition({ definition, permissions });
-      await store.clearRuns();
+      await runner.mutate(sessionIdOf(exec), () => store.saveDefinition({ definition, permissions }));
       return {
         ok: true,
         name: definition.name,
@@ -161,38 +164,53 @@ function toolDefine({ storeFor }) {
   };
 }
 
-function toolStart({ storeFor }) {
+function toolStart({ storeFor, runner, sessionIdOf, ctx }) {
   return {
     name: 'team_workflow_start',
-    description: 'Create a new run of the stored v2 workflow with an input object and persist it.',
-    parameters: objectSchema({ input: freeObject('Initial run input; available to nodes as $input.') }, []),
+    description: 'Create a run with an immutable repository directory and input. Preflight verification commands before any model work; does not execute nodes.',
+    parameters: objectSchema({ input: freeObject('Initial run input; available to nodes as $input.'), cwd: stringSchema('Absolute target repository path. Omit only to bind the current effective DSH working directory, not its original header.') }, []),
     output: {
-      schema: objectSchema({ runId: stringSchema(), status: stringSchema() }, ['runId', 'status']),
-      render: (_args, value) => [{ type: 'text', text: `Started ${value.runId} (${value.status}).` }],
+      schema: objectSchema({ runId: stringSchema(), status: stringSchema(), cwd: stringSchema() }, ['runId', 'status', 'cwd']),
+      render: (_args, value) => [{ type: 'text', text: `Created ${value.runId} (${value.status})\ncwd: ${value.cwd}` }],
     },
     async execute(args, exec) {
-      const stored = await storeFor(exec).loadDefinition();
-      if (!stored) throw new Error('no workflow defined; call team_workflow_define first');
-      const state = newRunState({
-        definition: stored.definition,
-        permissions: stored.permissions ?? DEFAULT_PERMISSIONS,
-        input: args?.input !== null && typeof args?.input === 'object' ? args.input : {},
+      return runner.mutate(sessionIdOf(exec), async () => {
+        const store = storeFor(exec);
+        const stored = await store.loadDefinition();
+        if (!stored) throw new Error('no workflow defined; call team_workflow_define first');
+        const previous = await store.latestRun();
+        if (previous && !['done', 'failed', 'interrupted'].includes(previous.status)) {
+          throw new Error('An unfinished run already exists. Continue or inspect it instead of creating a duplicate.');
+        }
+        const cwd = await executionCwd(ctx, exec, args?.cwd);
+        const state = newRunState({
+          definition: stored.definition, permissions: stored.permissions ?? DEFAULT_PERMISSIONS,
+          input: args?.input !== null && typeof args?.input === 'object' ? args.input : {}, cwd,
+        });
+        await preflightRun(state);
+        await store.saveRun(state);
+        return { runId: state.runId, status: state.status, cwd: state.cwd };
       });
-      await storeFor(exec).saveRun(state);
-      return { runId: state.runId, status: state.status };
     },
   };
 }
 
-function toolRun({ storeFor, ctx, settings, cwdOf }) {
+function toolRun({ runner, sessionIdOf }) {
   return {
     name: 'team_workflow_run',
-    description: 'Execute ready v2 nodes until the run waits for a human/join or finishes. Agent nodes spawn subagents; command/http nodes require the stored permission grant.',
+    description: 'Start or find the session-owned workflow job and return immediately. Follow progress with status/job_output; job_kill cancels. Failed or interrupted work is not replayed automatically.',
     parameters: objectSchema({ runId: stringSchema('Optional run id; defaults to the latest run.') }, []),
     output: {
       schema: objectSchema({
         runId: stringSchema(),
         status: stringSchema(),
+        cwd: stringSchema(),
+        jobId: stringSchema(),
+        current: freeObject('Current node/token, state and child activity.'),
+        execution: freeObject('Session-owned job lifecycle.'),
+        counts: freeObject('Token counts by state.'),
+        updatedAt: stringSchema(),
+        pauseReason: stringSchema('Empty when not paused.'),
         waiting: arraySchema(objectSchema({
           tokenId: stringSchema(),
           nodeId: stringSchema(),
@@ -204,25 +222,13 @@ function toolRun({ storeFor, ctx, settings, cwdOf }) {
       render: (_args, value) => [{ type: 'text', text: renderRun(value) }],
     },
     async execute(args, exec) {
-      const store = storeFor(exec);
-      const state = await loadRun(store, args?.runId);
-      const definition = await store.loadDefinition();
-      if (!definition) throw new Error('no workflow defined');
-      const executors = createExecutors({ ctx, exec, settings, cwd: cwdOf(exec) });
-      const control = await store.loadControl();
-      try {
-        await run(state, executors, { maxSteps: settings.maxSteps, control });
-      } catch (error) {
-        state.status = 'failed';
-        state.lastError = error.message;
-      }
-      await store.saveRun(state);
+      const state = await runner.dispatch(sessionIdOf(exec), args?.runId, exec);
       return summarizeRun(state);
     },
   };
 }
 
-function toolDecide({ storeFor }) {
+function toolDecide({ storeFor, runner, sessionIdOf }) {
   return {
     name: 'team_workflow_decide',
     description: 'Resolve a waiting human node with one of its declared outcomes, then persist the run.',
@@ -236,11 +242,13 @@ function toolDecide({ storeFor }) {
       render: (_args, value) => [{ type: 'text', text: `Decision recorded on ${value.runId} (${value.status}).` }],
     },
     async execute(args, exec) {
-      const store = storeFor(exec);
-      const state = await loadRun(store, null);
-      decide(state, { tokenId: requireText(args?.tokenId, 'tokenId'), outcome: requireText(args?.outcome, 'outcome'), output: args?.output ?? null });
-      await store.saveRun(state);
-      return { runId: state.runId, status: state.status };
+      return runner.mutate(sessionIdOf(exec), async () => {
+        const store = storeFor(exec);
+        const state = await loadRun(store, null);
+        decide(state, { tokenId: requireText(args?.tokenId, 'tokenId'), outcome: requireText(args?.outcome, 'outcome'), output: args?.output ?? null });
+        await store.saveRun(state);
+        return { runId: state.runId, status: state.status };
+      });
     },
   };
 }
@@ -248,7 +256,7 @@ function toolDecide({ storeFor }) {
 function toolStatus({ storeFor, ctx, boardUrl }) {
   return {
     name: 'team_workflow_status',
-    description: 'Show the stored v2 definition summary and the latest run: status, waiting human decisions, token counts and the optional board URL.',
+    description: 'Inspect persisted progress: bound cwd, current node and child, job id, checkpoints, errors and waiting decisions. Reading status never executes or retries work.',
     parameters: objectSchema({ runId: stringSchema('Optional run id; defaults to the latest run.') }, []),
     output: {
       schema: objectSchema({
@@ -291,7 +299,7 @@ function renderDefine(value) {
 
 function renderRun(value) {
   const waiting = value.waiting.map(token => `- ${token.nodeId} (${token.title}): ${token.outcomes.join(', ')}`).join('\n');
-  return `${value.status === 'failed' ? `Failed: ${value.error}\n` : ''}${value.runId}: ${value.status}${waiting ? `\nWaiting decisions:\n${waiting}` : ''}`;
+  return `${value.status === 'failed' ? `Failed: ${value.error}\n` : ''}${value.runId}: ${value.status}\ncwd: ${value.cwd || 'UNBOUND'}${value.jobId ? `\njob: ${value.jobId}` : ''}${value.current?.nodeId ? `\nnode: ${value.current.nodeId} (${value.current.status})` : ''}${waiting ? `\nWaiting decisions:\n${waiting}` : ''}`;
 }
 
 function resolveSettings(config) {
@@ -300,6 +308,8 @@ function resolveSettings(config) {
     subagentProvider: typeof config.subagentProvider === 'string' && config.subagentProvider !== '' ? config.subagentProvider : DEFAULT_CONFIG.subagentProvider,
     promptSectionOrder: Number.isInteger(config.promptSectionOrder) ? config.promptSectionOrder : DEFAULT_CONFIG.promptSectionOrder,
     maxSteps: Number.isInteger(config.maxSteps) && config.maxSteps > 0 ? config.maxSteps : DEFAULT_CONFIG.maxSteps,
+    agentTimeoutMs: Number.isFinite(config.agentTimeoutMs) && config.agentTimeoutMs > 0 ? config.agentTimeoutMs : DEFAULT_CONFIG.agentTimeoutMs,
+    maxFailures: Number.isInteger(config.maxFailures) && config.maxFailures > 0 ? config.maxFailures : DEFAULT_CONFIG.maxFailures,
   };
 }
 
