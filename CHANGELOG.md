@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Restore ordered multi-model selection in node details: checkbox multi-select,
+  up/down/remove, explicit save and default inheritance. Unsaved lists survive
+  polling; all selected candidates persist through the board API. Call errors
+  fail over in order; cancellation/invalid decisions do not switch models.
+
 - Fix the apparent startup hang: bind the effective target repository at start,
   preflight direct npm verification, and expose cwd/current node/child/errors.
 - Dispatch session-owned DSH jobs, share one runner between tools and both API

@@ -16,3 +16,4 @@ import './v2-runtime-safety.test.mjs';
 import './v2-runner.test.mjs';
 import './v2-api-lifecycle.test.mjs';
 import './v2-board-status.test.mjs';
+import './v2-model-fallback.test.mjs';

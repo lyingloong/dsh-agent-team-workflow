@@ -167,6 +167,17 @@ button { cursor: pointer; }
 .model-add .btn { padding: 3px 8px; font-size: 10.5px; }
 .model-help { padding: 7px 9px; color: var(--muted); font-size: 10px; line-height: 1.5; border-top: 1px solid var(--line); }
 .model-empty { padding: 9px; color: var(--muted); font-size: 10.5px; }
+.model-catalog { border-top: 1px solid var(--line); padding: 8px 9px; }
+.model-catalog summary { color: var(--text); font-size: 11px; cursor: pointer; }
+.model-catalog-items { max-height: 240px; overflow: auto; margin-top: 8px; }
+.model-provider { margin-bottom: 8px; }
+.model-provider > strong { display: block; color: var(--muted); font-size: 10.5px; margin-bottom: 4px; }
+.model-choice { display: flex; gap: 7px; align-items: flex-start; padding: 5px 6px; border-radius: 5px; cursor: pointer; font-size: 11px; }
+.model-choice:hover { background: var(--panel-2); }
+.model-choice input { margin-top: 2px; accent-color: var(--brand); }
+.model-choice small { display: block; color: var(--muted); font-size: 9px; }
+.model-actions button:disabled { opacity: .35; cursor: default; }
+
 .empty { padding: 44px 18px; text-align: center; color: var(--muted); }
 .empty strong { display: block; margin-bottom: 5px; color: var(--text); font-size: 13px; }
 .toast { position: fixed; right: 18px; bottom: 18px; z-index: 30; max-width: 440px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); font-size: 11.5px; }
@@ -291,6 +302,7 @@ button { cursor: pointer; }
   let busy = false;
   let toastTimer = null;
   const noteDrafts = new Map();
+  const modelDrafts = new Map();
   let loading = false;
 
   const $ = id => document.getElementById(id);
@@ -809,23 +821,54 @@ button { cursor: pointer; }
     return Array.isArray(state.models?.providers) ? state.models.providers : [];
   }
 
+  function modelDraft(node) {
+    if (!modelDrafts.has(node.id)) {
+      const models = Array.isArray(node.config?.models) && node.config.models.length
+        ? node.config.models
+        : (node.config?.provider && node.config?.model ? [{ provider: node.config.provider, model: node.config.model }] : []);
+      modelDrafts.set(node.id, { models: structuredClone(models), dirty: false });
+    }
+    return modelDrafts.get(node.id);
+  }
+
+  function modelKey(provider, model) { return JSON.stringify([provider, model]); }
+
   function renderModelPicker(node) {
     const providers = modelProviders();
-    if (!providers.length) {
-      return '<section class="detail-section"><div class="detail-section-head">模型</div><div class="model-empty">模型目录暂不可用。</div></section>';
-    }
-    const configured = Array.isArray(node.config?.models) && node.config.models.length
-      ? node.config.models[0]
-      : (node.config?.provider && node.config?.model ? { provider: node.config.provider, model: node.config.model } : null);
-    const provider = providers.find(item => item.id === configured?.provider) || providers[0];
-    const models = Array.isArray(provider.models) ? provider.models : [];
-    const providerOptions = providers.map(item => '<option value="' + esc(item.id) + '"' + (item.id === provider.id ? ' selected' : '') + '>' + esc(item.name || item.id) + '</option>').join('');
-    const modelOptions = models.length
-      ? models.map(item => '<option value="' + esc(item.id) + '"' + (item.id === configured?.model ? ' selected' : '') + '>' + esc(item.name || item.id) + '</option>').join('')
-      : '<option value="">无可用模型</option>';
-    return '<section class="detail-section"><div class="detail-section-head">模型<span class="spacer"></span>' + esc(configured ? configured.provider + ' / ' + configured.model : '继承 lane/宿主默认') + '</div>' +
-      '<div class="model-add"><select data-model-provider>' + providerOptions + '</select><select data-model-name>' + modelOptions + '</select><button class="btn" type="button" data-model-save>应用</button><button class="btn" type="button" data-model-clear>使用默认</button></div>' +
-      '<div class="model-help">选择模型会写入节点的单一 provider/model，并清除 fallback 列表；清空后继承 lane/宿主默认。</div></section>';
+    const draft = modelDraft(node);
+    const disabled = Boolean(state.run?.execution?.active) || busy;
+    const attr = disabled ? ' disabled' : '';
+    const chosen = new Set(draft.models.map(item => modelKey(item.provider, item.model)));
+    const rows = draft.models.length ? draft.models.map((item, index) =>
+      '<div class="model-row"><span class="model-index">' + (index + 1) + '</span><span class="model-name" title="' + esc(item.provider + ' / ' + item.model) + '">' + esc(item.provider) + ' / ' + esc(item.model) + '</span><span class="model-actions">' +
+      '<button type="button" data-model-action="up" data-model-index="' + index + '" title="上移" aria-label="上移模型"' + (disabled || !index ? ' disabled' : '') + '>↑</button>' +
+      '<button type="button" data-model-action="down" data-model-index="' + index + '" title="下移" aria-label="下移模型"' + (disabled || index === draft.models.length - 1 ? ' disabled' : '') + '>↓</button>' +
+      '<button type="button" data-model-action="remove" data-model-index="' + index + '" title="移除" aria-label="移除模型"' + attr + '>×</button></span></div>'
+    ).join('') : '<div class="model-empty">未指定模型：继承 lane / 宿主默认模型。</div>';
+    const catalog = providers.length ? providers.map(provider => {
+      const models = Array.isArray(provider.models) ? provider.models : [];
+      return '<div class="model-provider"><strong>' + esc(provider.name || provider.id) + '</strong>' + models.map(model => {
+        const selected = chosen.has(modelKey(provider.id, model.id));
+        return '<label class="model-choice"><input type="checkbox" data-model-check data-provider="' + esc(provider.id) + '" data-model="' + esc(model.id) + '"' + (selected ? ' checked' : '') + (disabled || (!selected && draft.models.length >= 8) ? ' disabled' : '') + '><span>' + esc(model.name || model.id) + '<small>' + esc(model.id) + '</small></span></label>';
+      }).join('') + '</div>';
+    }).join('') : '<div class="model-empty">模型目录暂不可用；已保存的模型顺序仍保留。</div>';
+    return '<section class="detail-section model-editor" data-model-editor><div class="detail-section-head">模型调用顺序<span class="spacer"></span>' + draft.models.length + ' / 8' + (draft.dirty ? ' · 未保存' : '') + '</div>' +
+      '<div class="model-list">' + rows + '</div>' +
+      '<details class="model-catalog"><summary>选择模型（可多选，按勾选顺序追加）</summary><div class="model-catalog-items">' + catalog + '</div></details>' +
+      '<div class="model-add"><button class="btn primary" type="button" data-model-save' + (disabled || !draft.dirty ? ' disabled' : '') + '>保存模型顺序</button><button class="btn" type="button" data-model-clear' + attr + '>恢复默认</button></div>' +
+      '<div class="model-help">一次节点执行按 1 → 2 → 3 调用；服务商/网络调用错误才尝试下一个。取消、超时、无效审批输出或审查不通过不会换模型重试。每次节点从首选模型开始，不是负载均衡。' + (disabled ? ' 当前作业执行中，请先暂停并等当前节点结束或停止作业后编辑。' : '') + '</div></section>';
+  }
+
+  function refreshModelPicker() {
+    const node = state.definition.nodes.find(item => item.id === selected);
+    const section = $("detailBody").querySelector("[data-model-editor]");
+    if (!node || !section) return;
+    const open = section.querySelector(".model-catalog")?.open;
+    const scroll = section.querySelector(".model-catalog-items")?.scrollTop || 0;
+    section.outerHTML = renderModelPicker(node);
+    const replacement = $("detailBody").querySelector("[data-model-editor]");
+    if (replacement && open) replacement.querySelector(".model-catalog").open = true;
+    if (replacement) replacement.querySelector(".model-catalog-items").scrollTop = scroll;
   }
 
   function renderDetail() {
@@ -852,6 +895,8 @@ button { cursor: pointer; }
       ? ""
       : '<section class="detail-section ' + (className || "") + '"><div class="detail-section-head">' + title + '</div><pre class="detail-pre">' + esc(JSON.stringify(value, null, 2)) + "</pre></section>";
     card.classList.remove("hide");
+    const modelCatalogOpen = $("detailBody").querySelector(".model-catalog")?.open;
+    const modelCatalogScroll = $("detailBody").querySelector(".model-catalog-items")?.scrollTop || 0;
     $("detailHint").textContent = node.id + " · " + (TYPE[node.type] || node.type);
     $("detailBody").innerHTML =
       '<div class="detail-side"><dl class="detail-kv">' +
@@ -877,9 +922,13 @@ button { cursor: pointer; }
         section("输入", token?.input ?? null) +
         section("运行上下文", nodeContext) +
         (token?.error ? section("错误", token.error, "detail-error") : "") +
-        section("节点配置", node.config ?? {}) +
         (node.type === "agent" ? renderModelPicker(node) : "") +
+        section("节点配置", node.config ?? {}) +
       '</div>';
+    const modelCatalog = $("detailBody").querySelector(".model-catalog");
+    if (modelCatalog && modelCatalogOpen) modelCatalog.open = true;
+    const modelItems = $("detailBody").querySelector(".model-catalog-items");
+    if (modelItems) modelItems.scrollTop = modelCatalogScroll;
   }
 
   function render() {
@@ -937,19 +986,23 @@ button { cursor: pointer; }
     }
   }
 
-  async function saveNodeModel(provider, model) {
-    if (busy || !selected) return;
+  async function saveNodeModels(models) {
+    if (busy || !selected || state.run?.execution?.active) return;
+    const nodeId = selected;
     busy = true;
     try {
-      const result = await postJson(API + "/node-model", { session: SESSION, nodeId: selected, provider, model });
+      const result = await postJson(API + "/node-model", { session: SESSION, nodeId, models });
       applyState(result);
       if (result.models) state.models = result.models;
+      modelDrafts.delete(nodeId);
+      busy = false;
       render();
-      toast(provider ? "模型已更新" : "已恢复默认模型");
+      toast(models.length ? "模型顺序已保存（调用失败时自动切换）" : "已恢复默认模型");
     } catch (error) {
       toast(error.message, true);
     } finally {
       busy = false;
+      refreshModelPicker();
     }
   }
 
@@ -1004,32 +1057,47 @@ button { cursor: pointer; }
     if (button) decide(button.dataset.token, button.dataset.outcome);
   });
   $("detailBody").addEventListener("change", event => {
-    const select = event.target.closest("[data-model-provider]");
-    if (!select) return;
-    const provider = modelProviders().find(item => item.id === select.value);
-    const target = $("detailBody").querySelector("[data-model-name]");
-    if (!target) return;
-    const models = Array.isArray(provider?.models) ? provider.models : [];
-    target.innerHTML = models.length
-      ? models.map(item => '<option value="' + esc(item.id) + '">' + esc(item.name || item.id) + '</option>').join('')
-      : '<option value="">无可用模型</option>';
+    const checkbox = event.target.closest("[data-model-check]");
+    if (!checkbox || state.run?.execution?.active) return;
+    const node = state.definition.nodes.find(item => item.id === selected);
+    if (!node || node.type !== "agent") return;
+    const draft = modelDraft(node);
+    const key = modelKey(checkbox.dataset.provider, checkbox.dataset.model);
+    if (checkbox.checked && !draft.models.some(item => modelKey(item.provider, item.model) === key)) {
+      if (draft.models.length >= 8) { checkbox.checked = false; toast("最多选择 8 个模型", true); return; }
+      draft.models.push({ provider: checkbox.dataset.provider, model: checkbox.dataset.model });
+    } else if (!checkbox.checked) {
+      draft.models = draft.models.filter(item => modelKey(item.provider, item.model) !== key);
+    }
+    draft.dirty = true;
+    refreshModelPicker();
   });
 
   $("detailBody").addEventListener("click", event => {
-    const save = event.target.closest("[data-model-save]");
-    if (save) {
-      const provider = $("detailBody").querySelector("[data-model-provider]")?.value || "";
-      const model = $("detailBody").querySelector("[data-model-name]")?.value || "";
-      if (provider && model) saveNodeModel(provider, model);
+    const node = state.definition.nodes.find(item => item.id === selected);
+    if (event.target.closest("[data-model-save]")) {
+      if (node) saveNodeModels(structuredClone(modelDraft(node).models));
       return;
     }
-    const clear = event.target.closest("[data-model-clear]");
-    if (clear) { saveNodeModel(null, null); return; }
+    if (event.target.closest("[data-model-clear]")) { saveNodeModels([]); return; }
+    const action = event.target.closest("[data-model-action]");
+    if (action && node && !state.run?.execution?.active) {
+      const draft = modelDraft(node), index = Number(action.dataset.modelIndex);
+      if (!Number.isInteger(index) || index < 0 || index >= draft.models.length) return;
+      if (action.dataset.modelAction === "remove") draft.models.splice(index, 1);
+      else {
+        const next = index + (action.dataset.modelAction === "up" ? -1 : 1);
+        if (next < 0 || next >= draft.models.length) return;
+        [draft.models[index], draft.models[next]] = [draft.models[next], draft.models[index]];
+      }
+      draft.dirty = true;
+      refreshModelPicker();
+      return;
+    }
     const link = event.target.closest("[data-select-node]");
     if (!link) return;
     selected = link.dataset.selectNode;
-    renderGraph();
-    renderDetail();
+    renderGraph(); renderDetail();
     $("detailCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
 

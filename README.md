@@ -313,7 +313,12 @@ The board is graph-first:
 - clicking a node opens its detail card **below the graph**, with latest output,
   token input, run context, node config, errors, token history, attempt/model
   metadata and clickable upstream/downstream links; agent nodes include a model
-  picker backed by the host model catalog and the node-model API;
+  multi-model checklist backed by the host model catalog and node-model API.
+  Select up to 8 candidates, reorder with ↑/↓, then save. Network/provider
+  call errors try the next candidate; a valid negative review is not a call error.
+  Cancellation, the overall node deadline, and invalid routing output stop rather
+  than switching models. Each node attempt starts from the first candidate;
+  this is ordered failover, not round-robin load balancing;
 - the **运行** card shows the bound cwd, job id, current node/child, last checkpoint,
   errors, Continue, Stop and the continuous switch; turning it off pauses at the
   next node boundary, not only at gates;
