@@ -9,11 +9,11 @@
  */
 
 import path from 'node:path';
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
+import { executeCommand } from './command.mjs';
+import { requireHttp } from './permissions.mjs';
 import { stat } from 'node:fs/promises';
 
-const execAsync = promisify(exec);
+
 
 // Model/development work has no default wall-clock deadline.
 // A positive explicit node/settings timeout is opt-in; 0 disables it.
@@ -73,12 +73,13 @@ export function createExecutors({ ctx, exec, settings = {}, cwd, onActivity }) {
             if (result?.stopReason === 'aborted') {
               throw executionError('execution_aborted', result.diagnostic ?? `agent ${node.id} was aborted`);
             }
-            if (result?.stopReason !== 'completed') throw new Error(result?.diagnostic ?? `subagent stopped: ${result?.stopReason ?? 'unknown'}`);
+            if (result?.stopReason === 'error') throw new Error(result.diagnostic ?? 'Provider call failed');
+            if (result?.stopReason !== 'completed') throw executionError('agent_incomplete', result?.diagnostic ?? ('Subagent stopped: ' + result?.stopReason));
             const parsed = parseAgentText(textOf(result?.output), { outcomes, fallback: outcomes[0] });
             return { ...parsed, model };
           } catch (error) {
             failure = cancellationError(error, scope.signal);
-            if (['execution_aborted', 'execution_timeout', 'invalid_agent_output', 'activity_persistence_failed'].includes(failure.code)) throw failure;
+            if (['execution_aborted', 'execution_timeout', 'invalid_agent_output', 'activity_persistence_failed', 'agent_incomplete'].includes(failure.code)) throw failure;
             failures.push(`${candidateLabel(candidate)}: ${failure?.message ?? String(failure)}`);
           } finally {
             if (activation && typeof activation.dispose === 'function') {
@@ -99,52 +100,78 @@ export function createExecutors({ ctx, exec, settings = {}, cwd, onActivity }) {
         scope.dispose();
       }
     },
-    async command({ node }) {
+    async command({ node, input }) {
       const commandCwd = node.config.cwd ? path.resolve(cwd, node.config.cwd) : cwd;
       const command = node.config.command;
       const scope = executionScope(exec.signal, node.config.timeoutMs ?? 120_000, `command ${node.id}`);
+      // JSON command nodes exchange exactly one small JSON value with the script:
+      // input through DSH_WORKFLOW_INPUT and a {outcome, output} result on stdout.
+      const environment = node.config.json === true
+        ? { ...process.env, DSH_WORKFLOW_INPUT: JSON.stringify(input ?? null) }
+        : process.env;
       try {
         throwIfAborted(scope.signal);
         await preflightCommand(command, commandCwd);
         throwIfAborted(scope.signal);
+        let stdout;
+        let stderr;
         try {
-          const { stdout, stderr } = await execAsync(command, {
+          ({ stdout, stderr } = await executeCommand(command, {
             cwd: commandCwd,
+            env: environment,
             signal: scope.signal,
             maxBuffer: 1_000_000,
-            windowsHide: true,
-          });
-          throwIfAborted(scope.signal);
-          return { outcome: 'complete', output: { stdout, stderr, code: 0, cwd: commandCwd, command } };
+          }));
         } catch (error) {
           const failure = cancellationError(error, scope.signal);
           if (['execution_aborted', 'execution_timeout'].includes(failure.code)) throw failure;
-          return {
-            outcome: 'fail',
-            output: { stdout: error.stdout ?? '', stderr: error.stderr ?? '', code: error.code ?? 1, cwd: commandCwd, command },
-          };
+          const code = typeof error.code === 'number' ? error.code : 1;
+          stdout = typeof error.stdout === 'string' ? error.stdout : '';
+          stderr = typeof error.stderr === 'string' ? error.stderr : '';
+          // A business failure still prints one valid JSON result; keep its
+          // outcome instead of discarding evidence as a shell error.
+          if (['command_output_limit', 'command_cleanup_failed'].includes(error.code)) throw error;
+          if (node.config.json === true) {
+            if (typeof error.code !== 'number') throw error;
+            return parseCommandResult(stdout, { code, stderr, cwd: commandCwd, command });
+          }
+          return { outcome: 'fail', output: { stdout, stderr, code, cwd: commandCwd, command } };
         }
+        throwIfAborted(scope.signal);
+        if (node.config.json === true) return parseCommandResult(stdout, { code: 0, stderr, cwd: commandCwd, command });
+        return { outcome: 'complete', output: { stdout, stderr, code: 0, cwd: commandCwd, command } };
       } finally {
         scope.dispose();
       }
     },
-    async http({ node }) {
+    async http({ node, permissions }) {
       const scope = executionScope(exec.signal, node.config.timeoutMs ?? 30_000, `http ${node.id}`);
       try {
         throwIfAborted(scope.signal);
-        const method = (node.config.method ?? 'GET').toUpperCase();
+        let method = (node.config.method ?? 'GET').toUpperCase();
         const headers = { ...(node.config.headers ?? {}) };
         let body;
         if (node.config.body !== undefined) {
           body = typeof node.config.body === 'string' ? node.config.body : JSON.stringify(node.config.body);
           if (!Object.keys(headers).some(key => key.toLowerCase() === 'content-type')) headers['content-type'] = 'application/json';
         }
-        const response = await waitWithSignal(fetch(node.config.url, { method, headers, body, signal: scope.signal }), scope.signal);
-        const text = await waitWithSignal(response.text(), scope.signal);
-        return {
-          outcome: response.ok ? 'complete' : 'fail',
-          output: { status: response.status, ok: response.ok, body: text.slice(0, 40_000) },
-        };
+        let url = node.config.url, response;
+        for (let hop = 0; ; hop++) {
+          requireHttp(permissions?.http, url);
+          response = await waitWithSignal(fetch(url, { method, headers, body, signal: scope.signal, redirect: 'manual' }), scope.signal);
+          if (![301,302,303,307,308].includes(response.status) || !response.headers.has('location')) break;
+          const target = new URL(response.headers.get('location'), url).href;
+          await response.body?.cancel();
+          if (hop >= 5) throw executionError('too_many_redirects', 'HTTP redirect limit exceeded');
+          requireHttp(permissions?.http, target);
+          if (new URL(target).origin !== new URL(url).origin) for (const key of Object.keys(headers)) {
+            if (['authorization','cookie','proxy-authorization'].includes(key.toLowerCase())) delete headers[key];
+          }
+          if (response.status === 303 || ([301,302].includes(response.status) && method === 'POST')) { method = 'GET'; body = undefined; }
+          url = target;
+        }
+        const { text, truncated } = await boundedBody(response, scope.signal);
+        return { outcome: response.ok ? 'complete' : 'fail', output: { status: response.status, ok: response.ok, body: text, truncated } };
       } catch (error) {
         throw cancellationError(error, scope.signal);
       } finally {
@@ -152,6 +179,19 @@ export function createExecutors({ ctx, exec, settings = {}, cwd, onActivity }) {
       }
     },
   };
+}
+
+async function boundedBody(response, signal) {
+  const reader = response.body?.getReader(); if (!reader) return { text:'', truncated:false };
+  const chunks = []; let size = 0, truncated = false;
+  try {
+    while (true) {
+      const { done, value } = await waitWithSignal(reader.read(), signal); if (done) break;
+      const remaining = 40_000 - size; chunks.push(value.subarray(0, Math.max(0, remaining))); size += value.length;
+      if (size > 40_000) { truncated = true; await reader.cancel(); break; }
+    }
+    return { text:Buffer.concat(chunks).toString('utf8'), truncated };
+  } finally { reader.releaseLock(); }
 }
 
 function executionError(code, message, cause) {
@@ -218,12 +258,15 @@ async function preflightCommand(command, cwd) {
 
 function modelCandidates(node, lane) {
   if (Array.isArray(node.config.models) && node.config.models.length > 0) {
-    return node.config.models.map(entry => ({ provider: entry.provider ?? null, model: entry.model ?? null }));
+    return node.config.models.map(entry => ({
+      provider: entry.provider ?? null,
+      model: entry.model ?? null,
+      reasoningEffort: entry.reasoningEffort ?? null,
+    }));
   }
   const provider = node.config.provider ?? lane?.adapter ?? null;
   const model = node.config.model ?? lane?.model ?? null;
-  if (provider !== null || model !== null) return [{ provider, model }];
-  return [{ provider: null, model: null }];
+  return [{ provider, model, reasoningEffort: node.config.reasoningEffort ?? lane?.reasoningEffort ?? null }];
 }
 
 function agentOptionsFor(candidate, lane) {
@@ -232,7 +275,9 @@ function agentOptionsFor(candidate, lane) {
   const model = candidate.model ?? lane?.model;
   if (provider) options.provider = provider;
   if (model && model !== 'host-default') options.model = model;
-  if (lane?.reasoningEffort) options.reasoningEffort = lane.reasoningEffort;
+  // A candidate without effort uses its own model default, not another lane's effort.
+  const reasoningEffort = candidate.reasoningEffort;
+  if (reasoningEffort) options.reasoningEffort = reasoningEffort;
   if (lane?.maxTokens) options.maxTokens = lane.maxTokens;
   return Object.keys(options).length > 0 ? options : null;
 }
@@ -240,6 +285,33 @@ function agentOptionsFor(candidate, lane) {
 function candidateLabel(candidate) {
   if (!candidate.provider && !candidate.model) return 'host-default';
   return `${candidate.provider ?? 'host-default'}/${candidate.model ?? 'host-default'}`;
+}
+
+function commandResultError(message) {
+  return executionError('invalid_command_output', message);
+}
+
+/** Accept exactly one trailing JSON decision from a JSON command node. */
+export function parseCommandResult(stdout, { code = 0, stderr = '', cwd = '', command = '' } = {}) {
+  const text = String(stdout ?? '').trim();
+  if (text === '') throw commandResultError('JSON command node printed no result; expected {"outcome":"...","output":...}');
+  let value;
+  try { value = JSON.parse(text); }
+  catch {
+    const objects = jsonObjects(text);
+    if (objects.length !== 1 || text.slice(objects[0].end).trim() !== '') throw commandResultError('JSON command needs one final unambiguous result');
+    value = objects[0].value;
+  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw commandResultError('JSON command node must print one object: {"outcome":"...","output":...}');
+  }
+  if (typeof value.outcome !== 'string' || value.outcome.trim() === '') {
+    throw commandResultError('JSON command result needs a non-empty "outcome" string');
+  }
+  return {
+    outcome: value.outcome,
+    output: Object.hasOwn(value, 'output') ? value.output : value,
+  };
 }
 
 export function agentPrompt({ definition, node, input, context, outcomes }) {  return [
@@ -265,7 +337,6 @@ export function parseAgentText(text, { outcomes, fallback = outcomes[0] }) {
   try {
     const parsed = JSON.parse(trimmed);
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      if (outcomes.length === 1) return { outcome: outcomes[0], output: { text } };
       throw invalid('agent response is not an object');
     }
     objects = [{ value: parsed, end: trimmed.length }];
@@ -283,14 +354,13 @@ export function parseAgentText(text, { outcomes, fallback = outcomes[0] }) {
     if (suffix !== '' && suffix !== '```') throw invalid('decision is not the final response');
     const parsed = candidate.value;
     if (Object.hasOwn(parsed, 'outcome') && !outcomes.includes(parsed.outcome)) throw invalid('agent returned an unknown outcome');
-    if (!Object.hasOwn(parsed, 'outcome') && outcomes.length !== 1) throw invalid('agent omitted its outcome');
+    if (!Object.hasOwn(parsed, 'outcome')) throw invalid('agent omitted its outcome');
     return {
       outcome: parsed.outcome ?? outcomes[0],
       output: Object.hasOwn(parsed, 'output') ? parsed.output : parsed,
     };
   }
-  if (outcomes.length !== 1 || !outcomes.includes(fallback)) throw invalid('agent response contains no unambiguous decision');
-  return { outcome: outcomes[0], output: { text } };
+  throw invalid('agent response contains no unambiguous decision');
 }
 
 function jsonObjects(text) {

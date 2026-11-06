@@ -1,14 +1,17 @@
-# dsh-agent-team-workflow bundle patch: mounts the v2 node workflow runtime.
+# dsh-auto-workflow bundle patch: mounts the persistent node workflow runtime.
 #
 # Install with `dsh plugin --profile <name> add <package-or-local-path>`.
-# The plugin registers five team_workflow_* tools and one usage section.
+# The plugin registers seven auto_workflow_* tools, one usage section, and the
+# 工作流 header button that opens the private board origin.
 # State is per DSH session under <dataDir>/sessions/<sessionId>; dataDir
 # defaults to the platform user-data directory.
 - insert:
-    - id: dsh-agent-team-workflow
-      name: 'dsh-agent-team-workflow'
+    - id: dsh-auto-workflow
+      name: 'dsh-auto-workflow'
       config:
         # Subagent provider used by agent nodes.
         subagentProvider: spawn
-        # Maximum node executions per team_workflow_run / board continue call.
+        # Cooperative scheduler admissions per slice; not a task lifetime limit.
         maxSteps: 40
+        # Consecutive negative outcomes allowed per packet+node before parking.
+        maxFailures: 3

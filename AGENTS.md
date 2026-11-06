@@ -1,14 +1,18 @@
-# agent-team-workflow development rules
+# Auto Workflow repository development rules
 
-## No backward compatibility during development
+## One current architecture, explicit version boundaries
 
-This repository is pre-1.0. When an architecture change lands, replace the old
-schema, engine, persisted state, tools and panel outright.
+Auto Workflow 1.0.0 is the first curated public release of the current plugin.
+Earlier experimental release/tag names were withdrawn by the maintainer; their
+commits remain in Git history. Package SemVer, graph apiVersion, run-state version
+and the example's business-store version are separate contracts.
 
-Do not add v1 compatibility layers, migrations, aliases, dual code paths, or
-"keep both" switches. Delete the replaced implementation and its tests. The
-maintainer explicitly chose this on 2026-11-04: development velocity and a clean
-model matter more than preserving the old stage-based format.
+Do not add speculative compatibility layers, migrations, aliases, dual code paths
+or "keep both" switches for the replaced stage engine. Replace obsolete code and
+tests when an architecture change is explicitly authorized. Document breaking
+boundaries and reject unsupported persisted states rather than silently migrating
+or replaying uncertain effects. This preserves the maintainer's clean-model
+policy chosen on 2026-11-04; a release number is not permission to rewrite user data.
 
 ## Permissions for workflow nodes
 

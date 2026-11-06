@@ -1,19 +1,17 @@
 /**
- * Run every v2 test file in one process.
+ * Run every test file in one process.
  *
- * The suites isolate themselves with temporary data directories, so sharing a
- * process is safe. The standard runner also works: `node --test tests/`.
+ * Suites isolate themselves with temporary data directories and repositories,
+ * so sharing a process is safe. The standard runner also works:
+ * `node --test tests/run.mjs`.
  */
 
-import './v2-runtime.test.mjs';
-import './v2-plugin.test.mjs';
-import './v2-web-api.test.mjs';
-import './client-bundle.test.mjs';
-import './examples.test.mjs';
-
-import './v2-executors-lifecycle.test.mjs';
-import './v2-runtime-safety.test.mjs';
-import './v2-runner.test.mjs';
-import './v2-api-lifecycle.test.mjs';
-import './v2-board-status.test.mjs';
-import './v2-model-fallback.test.mjs';
+import './v3-core.test.mjs';
+import './v3-executors.test.mjs';
+import './v3-plugin.test.mjs';
+import './v3-web-api.test.mjs';
+import './v3-board.test.mjs';
+import './development-example.test.mjs';
+import './audit-core.test.mjs';
+import './audit-integration.test.mjs';
+import './audit-example.test.mjs';

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>工作流看板</title>
+<title>Auto Workflow · 工作流看板</title>
 <style>
 :root {
   color-scheme: light;
@@ -81,10 +81,9 @@ button { cursor: pointer; }
 .node { cursor: pointer; }
 .node:hover .node-box { filter: drop-shadow(0 3px 8px rgba(16, 24, 40, .14)); }
 .node-box { fill: var(--panel); stroke: var(--line); stroke-width: 1; filter: drop-shadow(0 1px 2px rgba(16, 24, 40, .06)); }
-.node-box.wait { stroke: var(--warn); stroke-width: 2; }
 .node-box.running { stroke: var(--brand); stroke-width: 2; }
-.node-box.failed { stroke: var(--bad); stroke-width: 2; }
-.node-box.done { stroke: color-mix(in srgb, var(--ok) 24%, var(--line)); }
+.node-box.idle { stroke: color-mix(in srgb, var(--ok) 22%, var(--line)); }
+.node-box.disabled { stroke: var(--muted); opacity: .65; }
 .node-box.human { stroke-dasharray: 5 4; }
 .node-box.selected { stroke: var(--brand); stroke-width: 2; }
 .node-title { font-size: 13px; font-weight: 650; fill: var(--text); letter-spacing: -.005em; }
@@ -104,7 +103,9 @@ button { cursor: pointer; }
 .control-row input { accent-color: var(--brand); }
 .control-hint { margin-left: auto; color: var(--muted); font-size: 10px; }
 .queue-card { min-width: 0; }
-.queue-list { display: flex; flex-direction: column; }
+.queue-list { display: flex; flex-direction: column; min-height: 0; max-height: clamp(160px, 28vh, 280px); overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
+.queue-list:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.queue-list > * { flex-shrink: 0; }
 .queue-item { padding: 8px 12px; border-top: 1px solid var(--line); font-size: 11px; }
 .queue-item:first-child { border-top: 0; }
 .queue-item-title { color: var(--text); font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -155,7 +156,26 @@ button { cursor: pointer; }
 .detail-token .run-time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .detail-token.active { background: color-mix(in srgb, var(--brand) 6%, transparent); }
 .model-list { display: flex; flex-direction: column; }
-.model-row { display: flex; align-items: center; gap: 6px; padding: 6px 9px; border-top: 1px solid var(--line); font-size: 10.5px; }
+.model-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 9px; border-top: 1px solid var(--line); font-size: 10.5px; }
+.model-effort { display: flex; align-items: center; gap: 7px; width: 100%; margin-left: 22px; color: var(--muted); }
+.model-effort select { font: inherit; padding: 3px 6px; min-width: 108px; max-width: 100%; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; }
+.model-warning { width: 100%; margin-left: 22px; color: var(--warn); font-size: 10px; }
+.model-warning button { font: inherit; color: inherit; background: transparent; border: 0; text-decoration: underline; }
+.ref-btn { max-width: 100%; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); color: var(--brand); padding: 3px 6px; font-size: 10px; overflow-wrap: anywhere; text-align: left; }
+.ref-btn:hover { border-color: var(--brand); }
+.node-link { padding: 0; max-width: 72%; border: 0; background: none; color: var(--text); font: inherit; cursor: pointer; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-link:hover { color: var(--brand); }
+.queue-service { float: right; font-size: 10px; color: var(--ok); font-weight: 400; }
+.queue-service.running { color: var(--brand); }
+.queue-service.disabled { color: var(--muted); }
+.node-control { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.node-control input { accent-color: var(--brand); }
+.record { padding: 9px; border-top: 1px solid var(--line); min-width: 0; }
+.record-head { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.record-head time { margin-left: auto; color: var(--muted); font-size: 10px; }
+.record-meta { margin-top: 3px; color: var(--muted); font-size: 10.5px; overflow-wrap: anywhere; }
+.record-refs { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.critical-error { color: var(--bad); overflow-wrap: anywhere; padding: 6px 0; font-size: 11px; }
 .model-row:first-child { border-top: 0; }
 .model-index { width: 16px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .model-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -203,7 +223,7 @@ button { cursor: pointer; }
   <div class="top-inner">
     <div class="brand">
       <span class="mark">⌘</span>
-      <div><h1 id="name">工作流看板</h1><p id="sub">正在加载…</p></div>
+      <div><h1 id="name">Auto Workflow</h1><p id="sub">工作流看板 · 正在加载…</p></div>
     </div>
     <div class="top-actions">
       <span class="status" id="status">未运行</span>
@@ -243,16 +263,16 @@ button { cursor: pointer; }
           <button class="btn primary" id="runBtn" type="button">继续运行</button>
           <button class="btn" id="stopBtn" type="button" disabled>停止当前执行</button>
         </div>
-        <label class="control-row"><span>连续运行</span><input type="checkbox" id="continuousToggle"><span class="control-hint" id="controlHint"></span></label>
+        <label class="control-row"><span>全局调度</span><input type="checkbox" id="continuousToggle"><span class="control-hint" id="controlHint"></span></label>
       </section>
 
       <section class="card queue-card">
-        <div class="card-head"><strong>需求队列</strong><span class="hint" id="queueHint"></span></div>
-        <div class="queue-list" id="queueList"></div>
+        <div class="card-head"><strong>节点队列</strong><span class="hint" id="queueHint"></span></div>
+        <div class="queue-list" id="queueList" role="region" aria-label="节点队列（可滚动）" tabindex="0"></div>
       </section>
 
       <section class="card human-card">
-        <div class="card-head"><strong>Human 待办</strong><span class="hint" id="humanHint"></span></div>
+        <div class="card-head"><strong>Human 节点待处理</strong><span class="hint" id="humanHint"></span></div>
         <div class="human-todo" id="humanTodo"></div>
       </section>
     </div>
@@ -275,13 +295,13 @@ button { cursor: pointer; }
 (function () {
   "use strict";
 
-  const PUBLIC = location.pathname.includes("/public/");
-  const API = window.__BOARD_API_BASE__ || (PUBLIC ? "/plugins/dsh-agent-team-workflow/public/api" : "/plugins/dsh-agent-team-workflow/api");
+  const API = window.__BOARD_API_BASE__ || "/plugins/dsh-auto-workflow/api";
   const SESSION = new URLSearchParams(location.search).get("session") || "";
   const BOARD_TOKEN = new URLSearchParams(location.search).get("token") || "";
-  const STATUS = { running: "运行中", waiting: "等待决策", done: "已完成", failed: "失败", paused: "已暂停", interrupted: "已中断，需检查" };
-  const TOKEN = { ready: "就绪", running: "执行中", waiting: "等待", completed: "已完成", failed: "失败", interrupted: "已中断" };
-  const TYPE = { agent: "模型", command: "命令", http: "HTTP", human: "人工", fanout: "扇出", join: "聚合", gate: "开关", subworkflow: "子流程" };
+  const STATUS = { running: "调度中", idle: "空闲", waiting: "有等待中的数据包", done: "本批次已处理", failed: "有失败记录", paused: "调度已暂停", interrupted: "执行中断，需检查" };
+  const SERVICE = { running: "运行中", idle: "空闲", disabled: "已关闭" };
+  const TOKEN = { queued: "排队", ready: "就绪", running: "执行中", waiting: "等待", completed: "已完成", failed: "失败", interrupted: "已中断" };
+  const TYPE = { agent: "Agent", command: "命令", http: "HTTP", human: "Human", fanout: "分发", join: "汇合", gate: "调度门", subworkflow: "子工作流" };
   const STYLE = {
     agent: { color: "#4f7cff", glyph: "✦" },
     command: { color: "#b06b12", glyph: ">_" },
@@ -304,12 +324,37 @@ button { cursor: pointer; }
   const noteDrafts = new Map();
   const modelDrafts = new Map();
   let loading = false;
+  let mutationVersion = 0;
+  let catalogueLoaded = false;
+  let catalogueError = "";
+  const nodeHistory = new Map();
+  const artifacts = new Map();
+  let openedArtifact = null;
 
   const $ = id => document.getElementById(id);
+  const graphTools = $("graph").querySelector(".graph-tools");
   const withToken = url => BOARD_TOKEN ? url + (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(BOARD_TOKEN) : url;
 
+  function safeText(value) {
+    let text = String(value ?? "");
+    if (BOARD_TOKEN) text = text.split(BOARD_TOKEN).join("[redacted]");
+    return text.replace(/([?&](?:token|access_token|bearer)=)[^&#\s"<>]*/gi, "$1[redacted]").replace(/\bBearer\s+[^\s"<>]+/gi, "Bearer [redacted]");
+  }
   function esc(value) {
-    return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+    return safeText(value).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  }
+  function number(value) { return Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0; }
+  function nodeStat(node) {
+    const value = state.run?.nodeStats?.[node.id] || {};
+    const active = number(value.active), queued = number(value.queued), waiting = number(value.waiting);
+    const enabled = state.control?.nodes?.[node.id];
+    const status = enabled === false || (enabled === undefined && value.status === "disabled") ? "disabled" : active ? "running" : "idle";
+    return { status, active, queued, waiting, capacity: Math.max(1, number(value.capacity || node.concurrency || 1)) };
+  }
+  function historyKey(nodeId) { return JSON.stringify([state.run?.runId, nodeId]); }
+  function artifactKey(ref) { return JSON.stringify([state.run?.runId, ref]); }
+  function refButton(ref, label) {
+    return ref ? '<button class="ref-btn" type="button" data-ref="' + esc(ref) + '" title="按需读取此引用">' + esc(label) + ' · ' + esc(ref) + '</button>' : '';
   }
   function clip(value, max) {
     const text = String(value ?? "");
@@ -349,18 +394,6 @@ button { cursor: pointer; }
     }
     return lines.length ? lines : [""];
   }
-  function latest(tokens) {
-    const map = new Map();
-    for (const token of tokens || []) map.set(token.nodeId, token);
-    return map;
-  }
-  function tone(status) {
-    if (status === "running") return "running";
-    if (status === "waiting") return "wait";
-    if (status === "failed") return "failed";
-    if (status === "completed") return "done";
-    return "";
-  }
   function modelsOf(node) {
     if (Array.isArray(node.config?.models) && node.config.models.length) return node.config.models;
     const lane = (state.definition.providers || []).find(entry => entry.id === node.config?.lane);
@@ -382,50 +415,94 @@ button { cursor: pointer; }
     if (node.type === "fanout") return node.config?.items || "";
     if (node.type === "join") return node.config?.mode || "all";
     if (node.type === "subworkflow") return "内联子流程";
-    if (node.type === "gate") return "连续运行开关";
+    if (node.type === "gate") return node.config?.delayMs ? "调度延迟 " + node.config.delayMs + " ms" : "调度边界";
     return modelText(node);
   }
   function toast(text, bad) {
     const node = $("toast");
-    node.textContent = text;
+    node.textContent = safeText(text);
     node.className = "toast" + (bad ? " bad" : "");
     node.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { node.hidden = true; }, 3600);
   }
 
-  async function getJson(url) {
-    const response = await fetch(withToken(url), { cache: "no-store", headers: { accept: "application/json" } });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body?.error?.message || ("HTTP " + response.status));
-    return body;
-  }
-  async function postJson(url, body) {
-    const response = await fetch(withToken(url), { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) });
-    const value = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(value?.error?.message || ("HTTP " + response.status));
+  async function requestJson(url, options = {}) {
+    const response = await fetch(withToken(url), { cache: "no-store", ...options, headers: { accept: "application/json", ...options.headers } });
+    const value = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(safeText(value?.error?.message || value?.error || ("HTTP " + response.status)));
+    if (!value || typeof value !== "object") throw new Error("服务未返回有效 JSON；保留当前画布与草稿");
     return value;
   }
+  async function getJson(url) { return requestJson(url); }
+  async function postJson(url, body) {
+    mutationVersion += 1;
+    return requestJson(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  }
   function applyState(next) {
-    const control = state?.control;
-    const queue = state?.queue;
-    const models = state?.models;
-    state = next;
-    if (state.control === undefined) state.control = control;
-    if (state.queue === undefined) state.queue = queue;
-    if (state.models === undefined) state.models = models;
+    if (!next || typeof next !== "object") return;
+    const previous = state;
+    if (Object.hasOwn(next, "defined") || Object.hasOwn(next, "run")) state = { ...previous, ...next };
+    else state = { ...previous };
+    if (next.control !== undefined) state.control = next.control;
+    if (next.models !== undefined) state.models = next.models;
+    if (previous?.run?.runId !== state.run?.runId) {
+      nodeHistory.clear(); artifacts.clear(); openedArtifact = null; noteDrafts.clear();
+      for (const [key, draft] of modelDrafts) if (!draft.dirty) modelDrafts.delete(key);
+    }
+    for (const [key, draft] of modelDrafts) if (!draft.dirty) modelDrafts.delete(key);
   }
 
+  async function loadCatalogue() {
+    try {
+      const models = await getJson(API + "/models?session=" + encodeURIComponent(SESSION));
+      if (state) state.models = models;
+      catalogueLoaded = true; catalogueError = "";
+    } catch (error) { catalogueError = safeText(error.message); }
+  }
   async function load() {
     if (!SESSION || loading) return;
     loading = true;
+    const version = mutationVersion;
     try {
-      applyState(await getJson(API + "/state?session=" + encodeURIComponent(SESSION)));
-      try { state.models = await getJson(API + "/models?session=" + encodeURIComponent(SESSION)); } catch {}
+      const next = await getJson(API + "/state?session=" + encodeURIComponent(SESSION));
+      if (version !== mutationVersion) return;
+      applyState(next);
+      if (!catalogueLoaded) await loadCatalogue();
       render();
     } catch (error) {
-      toast("刷新失败（保留现有画布）：" + error.message, true);
+      if (!state) {
+        $("sub").textContent = "无法连接工作流 API";
+        $("graph").innerHTML = '<div class="empty"><strong>无法读取工作流</strong>' + esc(error.message) + '<br>请使用顶部刷新重试。</div>';
+      }
+      toast("刷新失败（保留现有画布与草稿）：" + error.message, true);
     } finally { loading = false; }
+  }
+
+  async function loadHistory(nodeId) {
+    if (!state.run?.runId) return;
+    const key = historyKey(nodeId), runId = state.run.runId;
+    if (nodeHistory.get(key)?.loading) return;
+    nodeHistory.set(key, { ...nodeHistory.get(key), loading: true, error: "" });
+    renderDetail();
+    try {
+      const result = await getJson(API + "/history?" + new URLSearchParams({ session: SESSION, runId, nodeId, limit: "30" }));
+      if (state.run?.runId === runId) nodeHistory.set(key, { items: Array.isArray(result.items) ? result.items.slice(0, 30) : [], loading: false });
+    } catch (error) { if (state.run?.runId === runId) nodeHistory.set(key, { ...nodeHistory.get(key), loading: false, error: safeText(error.message) }); }
+    renderDetail();
+  }
+  async function loadArtifact(ref) {
+    if (!state.run?.runId || !ref) return;
+    const runId = state.run.runId, key = artifactKey(ref);
+    openedArtifact = ref;
+    if (artifacts.has(key) && !artifacts.get(key).error) { renderDetail(); return; }
+    artifacts.set(key, { loading: true }); renderDetail();
+    try {
+      const result = await getJson(API + "/artifact?" + new URLSearchParams({ session: SESSION, runId, ref }));
+      if (state.run?.runId === runId) artifacts.set(key, { ...result, loading: false });
+    } catch (error) { if (state.run?.runId === runId) artifacts.set(key, { loading: false, error: safeText(error.message) }); }
+    while (artifacts.size > 12) artifacts.delete(artifacts.keys().next().value);
+    renderDetail();
   }
 
   /* ------------------------------------------------------------------ layout */
@@ -676,10 +753,6 @@ button { cursor: pointer; }
     const definition = state.definition;
     const graph = layout(definition);
     graphSize = { width: graph.width, height: graph.height };
-    const tokens = state.run?.tokens || [];
-    const byNode = latest(tokens);
-    const counts = new Map();
-    for (const token of tokens) counts.set(token.nodeId, (counts.get(token.nodeId) || 0) + 1);
     const parts = [];
     parts.push('<svg viewBox="0 0 ' + graph.width + " " + graph.height + '" width="' + graph.width + '" height="' + graph.height + '" role="img" aria-label="工作流节点图">');
     parts.push('<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#97a1ad"/></marker></defs>');
@@ -692,14 +765,14 @@ button { cursor: pointer; }
       }
     }
     for (const node of graph.nodes) {
-      const token = byNode.get(node.id);
-      const status = tone(token?.status);
+      const stat = nodeStat(node);
+      const status = stat.status;
       const style = STYLE[node.type] || { color: "#8a929e", glyph: "?" };
       const titleLines = wrap(node.title || node.id, 266);
       const metaY = node.y + (titleLines.length > 1 ? 58 : 48);
       const detailY = metaY + 16;
-      const dotColor = status === "failed" ? "var(--bad)" : status === "wait" ? "var(--warn)" : status === "done" ? "var(--ok)" : status === "running" ? "var(--brand)" : "var(--line-strong)";
-      const statusLabel = token ? (TOKEN[token.status] || token.status) : "";
+      const dotColor = status === "running" ? "var(--brand)" : status === "disabled" ? "var(--muted)" : "var(--ok)";
+      const statusLabel = SERVICE[status] + " · 活跃 " + stat.active + "/" + stat.capacity + " · 排队 " + stat.queued + " · 等待 " + stat.waiting;
       const classes = ["node-box", status, node.type === "human" ? "human" : "", selected === node.id ? "selected" : ""].filter(Boolean).join(" ");
       parts.push('<g class="node" data-node="' + esc(node.id) + '" role="button" tabindex="0" aria-label="' + esc(node.title || node.id) + '">');
       parts.push('<rect class="' + classes + '" x="' + node.x + '" y="' + node.y + '" width="' + node.w + '" height="' + node.h + '" rx="11"/>');
@@ -714,16 +787,11 @@ button { cursor: pointer; }
       parts.push('<text x="' + (node.x + 48) + '" y="' + detailY + '" class="node-detail-text">' + esc(clip(detailText(node), 290)) + "</text>");
       parts.push('<circle cx="' + (node.x + 16) + '" cy="' + (node.y + node.h - 14) + '" r="3.2" fill="' + dotColor + '" stroke="var(--panel)" stroke-width="1.4"/>');
       if (statusLabel) parts.push('<text x="' + (node.x + 24) + '" y="' + (node.y + node.h - 11) + '" class="node-status-label">' + esc(statusLabel) + "</text>");
-      const count = counts.get(node.id) || 0;
-      if (count) {
-        parts.push('<circle cx="' + (node.x + node.w - 16) + '" cy="' + (node.y + 16) + '" r="9" fill="var(--panel-2)" stroke="var(--line)"/>');
-        parts.push('<text x="' + (node.x + node.w - 16) + '" y="' + (node.y + 19) + '" text-anchor="middle" class="node-count">' + count + "</text>");
-      }
       parts.push("</g>");
     }
     parts.push("</svg>");
     const element = $("graph");
-    const tools = element.querySelector(".graph-tools");
+    const tools = element.querySelector(".graph-tools") || graphTools;
     element.innerHTML = parts.join("");
     if (tools) element.append(tools);
     if (!view.initialized) fitView("width");
@@ -738,24 +806,22 @@ button { cursor: pointer; }
   }
 
   function renderRun() {
-    const run = state.run;
-    $("runHint").textContent = run?.runId || "尚未运行";
-    const tokens = run?.tokens || [];
-    const completed = tokens.filter(token => token.status === "completed").length;
-    const waiting = run?.waiting || [];
+    const run = state.run, counts = run?.counts || {};
+    $("runHint").textContent = safeText(run?.runId || "尚未运行");
     $("runSummary").innerHTML = run
-      ? '<div><strong>' + esc(STATUS[run.status] || run.status) + '</strong> · ' + completed + ' / ' + tokens.length + ' 个节点完成</div>' +
-        '<div>等待人工：' + waiting.length + ' · 失败：' + tokens.filter(token => token.status === "failed").length + '</div>' +
-        '<div style="overflow-wrap:anywhere">工作目录：' + esc(run.cwd || '未绑定，禁止执行') + '</div>' +
-        '<div style="overflow-wrap:anywhere">作业：' + esc(run.jobId || '未调度') + (run.execution?.active ? ' · 执行中' : '') + '</div>' +
-        '<div>当前节点：' + esc(run.current?.nodeId || '—') + ' · ' + esc(TOKEN[run.current?.status] || run.current?.status || '—') + '</div>' +
-        (run.current?.activity?.childId ? '<div style="overflow-wrap:anywhere">子 agent：' + esc(run.current.activity.childId) + '</div>' : '') +
+      ? '<div><strong>' + esc(STATUS[run.status] || run.status) + '</strong></div>' +
+        '<div>活跃 ' + number(counts.running ?? counts.active) + ' · 排队 ' + number(counts.queued ?? counts.ready) + ' · 等待 ' + number(counts.waiting) + '</div>' +
+        '<div>累计处理 ' + number(counts.completed) + ' · 失败 ' + number(counts.failed) + ' · 中断 ' + number(counts.interrupted) + '</div>' +
+        '<div>Human 待处理：' + (run.waiting?.length || 0) + '（不阻塞其他数据包）</div>' +
+        '<div style="overflow-wrap:anywhere">绑定目录：' + esc(run.cwd || '未绑定，禁止执行') + '</div>' +
+        '<div style="overflow-wrap:anywhere">原生作业：' + esc(run.execution?.jobId || '未调度') + (run.execution?.active ? ' · 执行中' : ' · 空闲') + '</div>' +
         '<div>最近保存：' + esc(run.updatedAt || '—') + '</div>' +
-        (run.pauseReason ? '<div>暂停原因：' + esc(run.pauseReason) + '</div>' : '') +
-        (run.error ? '<div style="color:var(--bad);overflow-wrap:anywhere">' + esc(run.error) + '</div>' : '')
-      : '<div>还没有运行记录。工作流由助手启动；启动后这里显示状态和人工决策。</div>';
-    $("runBtn").disabled = !run || Boolean(run.execution?.active) || ["done", "failed", "interrupted"].includes(run.status) || !run.cwd || busy;
-    $("stopBtn").disabled = !run?.execution?.active;
+        (run.pauseReason ? '<div>调度说明：' + esc(run.pauseReason) + '</div>' : '') +
+        (run.error ? '<div class="critical-error" role="alert">' + esc(typeof run.error === 'string' ? run.error : JSON.stringify(run.error)) + '</div>' : '')
+      : '<div>还没有运行记录。由助手创建并启动；这里显示节点服务、数据包和人工决策。</div>';
+    const mounted = run?.execution?.mounted ?? run?.execution?.active;
+    $("runBtn").disabled = !run || Boolean(mounted) || ["failed", "interrupted"].includes(run.status) || !run.cwd || busy;
+    $("stopBtn").disabled = !mounted || busy;
     renderHuman();
   }
 
@@ -766,31 +832,24 @@ button { cursor: pointer; }
     const selectionStart = focus ? document.activeElement.selectionStart : null;
     const selectionEnd = focus ? document.activeElement.selectionEnd : null;
     const waiting = run?.waiting || [];
+    const waitingIds = new Set(waiting.map(item => item.tokenId || item.id));
+    for (const key of noteDrafts.keys()) if (!waitingIds.has(key)) noteDrafts.delete(key);
     const tokens = run?.tokens || [];
     $("humanHint").innerHTML = waiting.length ? '<span class="human-count">' + waiting.length + "</span>" : "";
     const items = waiting.map(item => {
-      const token = tokens.find(candidate => candidate.id === item.tokenId);
+      const tokenId = item.tokenId || item.id;
+      const token = tokens.find(candidate => candidate.id === tokenId);
       const node = state.definition.nodes.find(candidate => candidate.id === item.nodeId);
-      const outcomes = Array.isArray(item.outcomes) ? item.outcomes : (node?.config?.outcomes || []);
+      const outcomes = Array.isArray(item.outcomes) ? item.outcomes : (node?.config?.outcomes || ["approve", "reject"]);
       return '<div class="human-item"><div class="human-item-title">' + esc(item.title || node?.title || item.nodeId) + '</div>' +
-        '<div class="human-item-meta">' + esc(item.nodeId) + ' · 人工节点' + (token?.createdAt ? ' · ' + esc(formatTime(token.createdAt)) : '') + '</div>' +
-        '<textarea class="human-item-note" data-note="' + esc(item.tokenId) + '" placeholder="可选：审批留言/修改意见">' + esc(noteDrafts.get(item.tokenId) || "") + '</textarea>' +
+        '<div class="human-item-meta">节点 ' + esc(item.nodeId) + ' · 数据包 ' + esc(item.packetId || token?.packetId || '—') + (token?.createdAt ? ' · ' + esc(formatTime(token.createdAt)) : '') + '</div>' +
+        '<button class="ref-btn" type="button" data-select-node="' + esc(item.nodeId) + '">查看节点与输入引用</button>' +
+        '<textarea class="human-item-note" data-note="' + esc(tokenId) + '" aria-label="人工决策留言" placeholder="可选：审批留言/修改意见">' + esc(noteDrafts.get(tokenId) || "") + '</textarea>' +
         '<div class="human-item-actions">' + outcomes.map(outcome =>
-          '<button class="btn ' + (outcome === "reject" ? "reject" : "primary") + '" data-token="' + esc(item.tokenId) + '" data-outcome="' + esc(outcome) + '">' + esc(outcome) + "</button>"
+          '<button type="button" class="btn ' + (outcome === "reject" ? "reject" : "primary") + '" data-token="' + esc(tokenId) + '" data-outcome="' + esc(outcome) + '"' + (busy ? ' disabled' : '') + '>' + esc(outcome) + "</button>"
         ).join("") + '</div></div>';
     }).join("");
-    const humanNodes = new Set(state.definition.nodes.filter(node => node.type === "human").map(node => node.id));
-    const history = tokens
-      .filter(token => humanNodes.has(token.nodeId) && (token.status === "completed" || token.status === "failed"))
-      .slice(-6)
-      .reverse();
-    const historyHtml = history.length
-      ? '<div class="human-history"><div class="human-history-title">最近决策</div>' + history.map(token => {
-          const node = state.definition.nodes.find(candidate => candidate.id === token.nodeId);
-          return '<div class="human-history-item"><strong>' + esc(node?.title || token.nodeId) + '</strong><span>' + esc(token.outcome || TOKEN[token.status] || token.status) + (token.updatedAt ? ' · ' + esc(formatTime(token.updatedAt)) : '') + '</span></div>';
-        }).join("") + "</div>"
-      : "";
-    $("humanTodo").innerHTML = (items || '<div class="human-empty">当前没有待人工处理的事项。<br>工作流停在 human 节点时会出现在这里。</div>') + historyHtml;
+    $("humanTodo").innerHTML = items || '<div class="human-empty">当前没有待人工处理的数据包。<br>Human 节点只等待对应数据包；其他数据包仍可流转。历史记录可在节点详情中按需查看。</div>';
     if (focus) {
       const field = [...$("humanTodo").querySelectorAll("[data-note]")].find(item => item.dataset.note === focus);
       field?.focus({preventScroll:true}); field?.setSelectionRange(selectionStart, selectionEnd);
@@ -799,22 +858,23 @@ button { cursor: pointer; }
 
   function renderControl() {
     const continuous = state.control?.continuous !== false;
-    const paused = state.run?.status === "paused" || Boolean(state.run?.tokens?.some(token => token.status === "waiting" && token.reason === "gate_paused"));
     $("continuousToggle").checked = continuous;
-    $("controlHint").textContent = continuous ? (paused ? "已开启，可继续" : "开") : (paused ? "已暂停，队列继续累计" : "下一节点前暂停");
+    $("continuousToggle").disabled = busy || !state.defined;
+    $("controlHint").textContent = continuous ? "允许调度新执行" : "当前执行收尾，队列保留";
   }
 
   function renderQueue() {
-    const queue = state.queue;
-    if (!queue) {
-      $("queueHint").textContent = "";
-      $("queueList").innerHTML = '<div class="queue-empty">无法读取需求队列；需要一次助手会话以确定仓库 cwd。</div>';
-      return;
-    }
-    $("queueHint").textContent = queue.queued + " 待处理 · " + queue.seedsReady + " 种子";
-    $("queueList").innerHTML = queue.items?.length
-      ? queue.items.map(item => '<div class="queue-item"><div class="queue-item-title">' + esc(item.title) + '</div><div class="queue-item-meta"><span>' + esc(item.source || "queue") + '</span><span>priority ' + esc(item.priority ?? "—") + '</span>' + (item.tags || []).map(tag => '<span>#' + esc(tag) + '</span>').join("") + '</div></div>').join("")
-      : '<div class="queue-empty">队列为空。<br>开关开启后，需求师会从种子池继续挖掘。</div>';
+    const nodes = state.definition?.nodes || [];
+    const queued = nodes.reduce((sum, node) => sum + nodeStat(node).queued, 0);
+    $("queueHint").textContent = nodes.length + " 节点 · " + queued + " 排队 · 区内滚动";
+    const list = $("queueList"), scrollTop = list.scrollTop;
+    list.innerHTML = nodes.length
+      ? nodes.map(node => {
+          const stat = nodeStat(node);
+          return '<div class="queue-item"><div class="queue-item-title"><button class="node-link" type="button" data-select-node="' + esc(node.id) + '">' + esc(node.title || node.id) + '</button><span class="queue-service ' + stat.status + '">' + SERVICE[stat.status] + '</span></div><div class="queue-item-meta"><span>活跃 ' + stat.active + '/' + stat.capacity + '</span><span>排队 ' + stat.queued + '</span><span>等待 ' + stat.waiting + '</span></div></div>';
+        }).join("") + '<div class="queue-empty">节点关闭只暂停自己的队列；全局调度开关独立控制。点击节点查看数据包与引用。</div>'
+      : '<div class="queue-empty">尚无节点。队列由运行时维护，不读取业务文件。</div>';
+    list.scrollTop = scrollTop;
   }
 
   function modelProviders() {
@@ -825,13 +885,28 @@ button { cursor: pointer; }
     if (!modelDrafts.has(node.id)) {
       const models = Array.isArray(node.config?.models) && node.config.models.length
         ? node.config.models
-        : (node.config?.provider && node.config?.model ? [{ provider: node.config.provider, model: node.config.model }] : []);
+        : (node.config?.provider && node.config?.model ? [{ provider: node.config.provider, model: node.config.model, ...(node.config.reasoningEffort ? { reasoningEffort: node.config.reasoningEffort } : {}) }] : []);
       modelDrafts.set(node.id, { models: structuredClone(models), dirty: false });
     }
     return modelDrafts.get(node.id);
   }
 
   function modelKey(provider, model) { return JSON.stringify([provider, model]); }
+  function reasoningOptions(candidate) {
+    const provider = modelProviders().find(item => item.id === candidate.provider);
+    const model = provider?.models?.find(item => item.id === candidate.model);
+    const seen = new Set();
+    return (Array.isArray(model?.reasoningEfforts) ? model.reasoningEfforts : []).filter(item => {
+      if (!item || typeof item.id !== "string" || !item.id || seen.has(item.id)) return false;
+      seen.add(item.id); return true;
+    });
+  }
+  function renderReasoning(candidate, index, disabled) {
+    const options = reasoningOptions(candidate);
+    const unsupported = candidate.reasoningEffort && !options.some(option => option.id === candidate.reasoningEffort);
+    return '<label class="model-effort">推理强度 <select data-model-effort data-model-index="' + index + '" aria-label="模型 ' + (index + 1) + ' 推理强度"' + (disabled ? ' disabled' : '') + '><option value=""' + (!candidate.reasoningEffort || unsupported ? ' selected' : '') + '>默认</option>' + options.map(option => '<option value="' + esc(option.id) + '"' + (candidate.reasoningEffort === option.id ? ' selected' : '') + '>' + esc(option.label || option.id) + '</option>').join('') + '</select></label>' +
+      (unsupported ? '<span class="model-warning">已保存 ' + esc(candidate.reasoningEffort) + '，当前目录未提供此设置。<button type="button" data-model-action="default-effort" data-model-index="' + index + '"' + (disabled ? ' disabled' : '') + '>改为默认</button></span>' : '');
+  }
 
   function renderModelPicker(node) {
     const providers = modelProviders();
@@ -843,7 +918,7 @@ button { cursor: pointer; }
       '<div class="model-row"><span class="model-index">' + (index + 1) + '</span><span class="model-name" title="' + esc(item.provider + ' / ' + item.model) + '">' + esc(item.provider) + ' / ' + esc(item.model) + '</span><span class="model-actions">' +
       '<button type="button" data-model-action="up" data-model-index="' + index + '" title="上移" aria-label="上移模型"' + (disabled || !index ? ' disabled' : '') + '>↑</button>' +
       '<button type="button" data-model-action="down" data-model-index="' + index + '" title="下移" aria-label="下移模型"' + (disabled || index === draft.models.length - 1 ? ' disabled' : '') + '>↓</button>' +
-      '<button type="button" data-model-action="remove" data-model-index="' + index + '" title="移除" aria-label="移除模型"' + attr + '>×</button></span></div>'
+      '<button type="button" data-model-action="remove" data-model-index="' + index + '" title="移除" aria-label="移除模型"' + attr + '>×</button></span>' + renderReasoning(item, index, disabled) + '</div>'
     ).join('') : '<div class="model-empty">未指定模型：继承 lane / 宿主默认模型。</div>';
     const catalog = providers.length ? providers.map(provider => {
       const models = Array.isArray(provider.models) ? provider.models : [];
@@ -856,7 +931,7 @@ button { cursor: pointer; }
       '<div class="model-list">' + rows + '</div>' +
       '<details class="model-catalog"><summary>选择模型（可多选，按勾选顺序追加）</summary><div class="model-catalog-items">' + catalog + '</div></details>' +
       '<div class="model-add"><button class="btn primary" type="button" data-model-save' + (disabled || !draft.dirty ? ' disabled' : '') + '>保存模型顺序</button><button class="btn" type="button" data-model-clear' + attr + '>恢复默认</button></div>' +
-      '<div class="model-help">一次节点执行按 1 → 2 → 3 调用；服务商/网络调用错误才尝试下一个。取消、超时、无效审批输出或审查不通过不会换模型重试。每次节点从首选模型开始，不是负载均衡。' + (disabled ? ' 当前作业执行中，请先暂停并等当前节点结束或停止作业后编辑。' : '') + '</div></section>';
+      '<div class="model-help">每次执行从首选模型开始，调用错误才尝试下一候选；负面结果不会换模型重试。推理强度只展示对应模型目录实际声明的选项，空目录仅支持默认。' + (disabled ? ' 当前原生作业执行中；关闭调度并等待当前执行收尾后编辑。' : '') + (catalogueError ? ' 目录读取失败：' + esc(catalogueError) : '') + '</div></section>';
   }
 
   function refreshModelPicker() {
@@ -871,81 +946,96 @@ button { cursor: pointer; }
     if (replacement) replacement.querySelector(".model-catalog-items").scrollTop = scroll;
   }
 
+  function renderRecord(item) {
+    const status = item.status || item.state || "";
+    const activity = item.activity;
+    const activityText = typeof activity === "string" ? activity : [activity?.status, activity?.message, activity?.childId].filter(Boolean).join(" · ");
+    const error = typeof item.error === "string" ? item.error : [item.error?.code, item.error?.message].filter(Boolean).join(": ");
+    return '<div class="record"><div class="record-head"><strong>' + esc(TOKEN[status] || status || '记录') + '</strong><span>' + esc(item.outcome || '') + '</span><time>' + esc(formatTime(item.updatedAt || item.createdAt || item.time)) + '</time></div>' +
+      '<div class="record-meta">执行 ' + esc(item.id || item.tokenId || '—') + ' · 数据包 ' + esc(item.packetId || '—') + (item.attempt ? ' · 尝试 ' + number(item.attempt) : '') + '</div>' +
+      (activityText ? '<div class="record-meta">' + esc(activityText) + '</div>' : '') +
+      (item.reason ? '<div class="record-meta">' + esc(item.reason) + '</div>' : '') +
+      (error ? '<div class="critical-error" role="alert">' + esc(error) + '</div>' : '') +
+      '<div class="record-refs">' + refButton(item.inputRef, '输入') + refButton(item.outputRef, '输出') + '</div></div>';
+  }
+  function renderArtifact() {
+    if (!openedArtifact) return '';
+    const item = artifacts.get(artifactKey(openedArtifact));
+    const text = item?.loading ? '读取中…' : item?.error ? item.error : JSON.stringify(item?.value, null, 2);
+    return '<section class="detail-section' + (item?.error ? ' detail-error' : '') + '"><div class="detail-section-head">引用内容 · ' + esc(openedArtifact) + '<span class="spacer"></span>' + (item?.bytes !== undefined ? number(item.bytes) + ' bytes' : '') + '<button class="icon-btn" type="button" data-close-artifact aria-label="关闭引用内容">×</button></div>' +
+      (item?.truncated ? '<div class="critical-error">此响应已截断，请在工作目录检查完整产物。</div>' : '') + '<pre class="detail-pre">' + esc(text) + '</pre>' + (item?.error ? '<button class="btn" type="button" data-ref="' + esc(openedArtifact) + '">重试读取</button>' : '') + '</section>';
+  }
   function renderDetail() {
     const card = $("detailCard");
     if (!selected || !state.definition) { card.classList.add("hide"); return; }
     const node = state.definition.nodes.find(item => item.id === selected);
     if (!node) { card.classList.add("hide"); return; }
-    const tokens = state.run?.tokens || [];
-    const history = tokens.filter(token => token.nodeId === selected);
-    const token = history[history.length - 1];
-    const definition = state.definition;
-    const incoming = definition.edges.filter(edge => edge.to === selected);
-    const outgoing = definition.edges.filter(edge => edge.from === selected);
-    const nodeContext = state.run?.context?.nodes?.[selected] ?? null;
-    const model = token?.model ? [token.model.provider, token.model.model].filter(Boolean).join(" / ") : "";
-    const status = token ? (TOKEN[token.status] || token.status) : "未执行";
+    const tokens = (state.run?.tokens || []).filter(token => token.nodeId === selected);
+    const stat = nodeStat(node), history = nodeHistory.get(historyKey(selected));
+    const incoming = state.definition.edges.filter(edge => edge.to === selected);
+    const outgoing = state.definition.edges.filter(edge => edge.from === selected);
     const links = (edges, empty) => edges.length
-      ? edges.map(edge => '<button class="node-chip" type="button" data-select-node="' + esc(edge.from === selected ? edge.to : edge.from) + '"><span>' + esc(edge.from === selected ? edge.to : edge.from) + '</span><span class="edge-on">' + esc(edge.on || "complete") + "</span></button>").join("")
-      : '<span class="human-empty" style="padding:0">' + empty + "</span>";
-    const tokenRows = history.length
-      ? history.map((item, index) => '<div class="detail-token' + (item.id === token?.id ? " active" : "") + '"><span class="run-status">' + esc(TOKEN[item.status] || item.status) + '</span><span class="run-outcome">' + esc(item.outcome || item.error?.code || "—") + (item.attempt ? ' · #' + item.attempt : '') + '</span><span class="run-time">' + esc(formatTime(item.updatedAt || item.createdAt)) + "</span></div>").join("")
-      : '<div class="human-empty" style="padding:0">该节点还未执行。</div>';
-    const section = (title, value, className) => value === undefined || value === null
-      ? ""
-      : '<section class="detail-section ' + (className || "") + '"><div class="detail-section-head">' + title + '</div><pre class="detail-pre">' + esc(JSON.stringify(value, null, 2)) + "</pre></section>";
+      ? edges.map(edge => '<button class="node-chip" type="button" data-select-node="' + esc(edge.from === selected ? edge.to : edge.from) + '"><span>' + esc(edge.from === selected ? edge.to : edge.from) + '</span><span class="edge-on">' + esc(edge.on || "complete") + '</span></button>').join('')
+      : '<span class="muted-note" style="padding:0">' + empty + '</span>';
+    const packets = state.run?.packets || {};
+    const packetIds = [...new Set(tokens.map(token => token.packetId).filter(Boolean))];
+    const packetRows = packetIds.map(id => {
+      const packet = Array.isArray(packets) ? packets.find(item => item.id === id) : packets[id];
+      return '<div class="record"><div class="record-meta">数据包 ' + esc(id) + (packet?.status ? ' · ' + esc(TOKEN[packet.status] || packet.status) : '') + '</div><div class="record-refs">' + refButton(packet?.inputRef, '原始输入') + refButton(packet?.lastRef, '最近结果') + '</div></div>';
+    }).join('');
     card.classList.remove("hide");
     const modelCatalogOpen = $("detailBody").querySelector(".model-catalog")?.open;
     const modelCatalogScroll = $("detailBody").querySelector(".model-catalog-items")?.scrollTop || 0;
-    $("detailHint").textContent = node.id + " · " + (TYPE[node.type] || node.type);
+    const effortFocus = document.activeElement?.hasAttribute?.("data-model-effort") ? document.activeElement.dataset.modelIndex : null;
+    $("detailHint").textContent = safeText(node.id + " · " + (TYPE[node.type] || node.type));
     $("detailBody").innerHTML =
-      '<div class="detail-side"><dl class="detail-kv">' +
-        '<dt>节点</dt><dd>' + esc(node.id) + '</dd>' +
-        '<dt>标题</dt><dd>' + esc(node.title || node.id) + '</dd>' +
-        '<dt>类型</dt><dd>' + esc(TYPE[node.type] || node.type) + '</dd>' +
-        (node.role ? '<dt>角色</dt><dd>' + esc(node.role) + '</dd>' : '') +
-        '<dt>状态</dt><dd>' + esc(status) + '</dd>' +
-        (token ? '<dt>尝试</dt><dd>#' + token.attempt + '</dd>' : '') +
-        (model ? '<dt>模型</dt><dd>' + esc(model) + '</dd>' : '') +
-        (token?.createdAt ? '<dt>开始</dt><dd>' + esc(token.createdAt) + '</dd>' : '') +
-        (token?.updatedAt ? '<dt>更新</dt><dd>' + esc(token.updatedAt) + '</dd>' : '') +
-        '<dt>执行次数</dt><dd>' + history.length + '</dd>' +
-        (node.type === "human" ? '<dt>可选结果</dt><dd>' + esc((node.config?.outcomes || ["approve", "reject"]).join(" / ")) + '</dd>' : '') +
-        (token?.branch ? '<dt>分支</dt><dd>#' + token.branch.index + '</dd>' : '') +
-      '</dl>' +
-      '<div class="detail-links"><div class="detail-links-title">上游</div>' + links(incoming, "无上游") + '</div>' +
-      '<div class="detail-links"><div class="detail-links-title">下游</div>' + links(outgoing, "无下游") + '</div>' +
-      '<section class="detail-section"><div class="detail-section-head">Token 历史<span class="spacer"></span>' + history.length + ' 条</div><div class="detail-token-list">' + tokenRows + '</div></section>' +
-      '</div>' +
+      '<div class="detail-side"><dl class="detail-kv"><dt>节点</dt><dd>' + esc(node.id) + '</dd><dt>标题</dt><dd>' + esc(node.title || node.id) + '</dd><dt>类型</dt><dd>' + esc(TYPE[node.type] || node.type) + '</dd>' +
+      (node.role ? '<dt>角色</dt><dd>' + esc(node.role) + '</dd>' : '') +
+      '<dt>服务状态</dt><dd>' + SERVICE[stat.status] + '</dd><dt>活跃 / 容量</dt><dd>' + stat.active + ' / ' + stat.capacity + '</dd><dt>排队 / 等待</dt><dd>' + stat.queued + ' / ' + stat.waiting + '</dd></dl>' +
+      '<label class="node-control"><input type="checkbox" data-node-enabled="' + esc(node.id) + '"' + (stat.status !== 'disabled' ? ' checked' : '') + (busy ? ' disabled' : '') + '>允许此节点接收新执行</label><div class="model-help">只控制此节点；关闭后保留队列，当前执行收尾。其他节点不受影响。</div>' +
+      '<div class="detail-links"><div class="detail-links-title">上游</div>' + links(incoming, '无上游') + '</div><div class="detail-links"><div class="detail-links-title">下游</div>' + links(outgoing, '无下游') + '</div>' +
+      '<section class="detail-section"><div class="detail-section-head">当前数据包</div>' + (packetRows || '<div class="muted-note">此节点暂无热数据包；终态元数据请查看历史。</div>') + '</section></div>' +
       '<div class="detail-main">' +
-        section("最近输出", token?.output ?? null) +
-        section("输入", token?.input ?? null) +
-        section("运行上下文", nodeContext) +
-        (token?.error ? section("错误", token.error, "detail-error") : "") +
-        (node.type === "agent" ? renderModelPicker(node) : "") +
-        section("节点配置", node.config ?? {}) +
-      '</div>';
+      '<section class="detail-section"><div class="detail-section-head">当前执行与队列<span class="spacer"></span>' + tokens.length + ' 条热记录</div>' + (tokens.map(renderRecord).join('') || '<div class="muted-note">当前没有执行。节点服务可保持空闲，等待新数据包。</div>') + '</section>' +
+      '<section class="detail-section"><div class="detail-section-head">最近历史<span class="spacer"></span><button class="btn" type="button" data-load-history' + (!state.run || history?.loading ? ' disabled' : '') + '>' + (history?.loading ? '读取中…' : history ? '刷新历史' : '加载历史') + '</button></div>' +
+      (history?.error ? '<div class="critical-error" role="alert">' + esc(history.error) + '</div>' : '') +
+      (history?.items?.length ? history.items.map(renderRecord).join('') : '<div class="muted-note">' + (history?.items ? '暂无保留的历史记录。' : '点击后按需读取最近 30 条元数据；输入 / 输出内容需点击引用。') + '</div>') + '</section>' +
+      renderArtifact() + (node.type === 'agent' ? renderModelPicker(node) : '') + '</div>';
     const modelCatalog = $("detailBody").querySelector(".model-catalog");
     if (modelCatalog && modelCatalogOpen) modelCatalog.open = true;
     const modelItems = $("detailBody").querySelector(".model-catalog-items");
     if (modelItems) modelItems.scrollTop = modelCatalogScroll;
+    if (effortFocus !== null) [...$("detailBody").querySelectorAll("[data-model-effort]")].find(item => item.dataset.modelIndex === effortFocus)?.focus({ preventScroll: true });
+  }
+
+  function selectNode(nodeId, scroll = true) {
+    if (selected !== nodeId) openedArtifact = null;
+    selected = nodeId;
+    renderGraph(); renderDetail();
+    if (scroll) $("detailCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function render() {
     if (!state) return;
-    if (!state.defined) {
-      $("name").textContent = "工作流看板";
+    if (!state.defined || !state.definition) {
+      $("name").textContent = "Auto Workflow";
       $("sub").textContent = "当前会话还没有工作流";
-      $("graph").innerHTML = '<div class="empty"><strong>还没有工作流</strong>让助手通过工具创建一个。</div>';
+      $("status").textContent = "未定义";
+      $("status").className = "status";
+      $("graph").innerHTML = '<div class="empty"><strong>还没有工作流</strong>请让助手使用 auto_workflow_define 创建节点图，再使用 auto_workflow_start 启动。</div>';
+      $("runSummary").innerHTML = '<div>尚无工作流或运行记录。</div>';
+      $("runBtn").disabled = true; $("stopBtn").disabled = true;
+      $("humanTodo").innerHTML = '<div class="human-empty">Human 节点等待对应数据包时会显示在这里；其他数据包不受影响。</div>';
+      $("detailCard").classList.add("hide"); renderControl(); renderQueue();
       return;
     }
     const definition = state.definition;
-    $("name").textContent = definition.name;
-    $("sub").textContent = definition.nodes.length + " 节点 · " + definition.edges.length + " 边";
+    $("name").textContent = safeText(definition.name || "Auto Workflow");
+    $("sub").textContent = "Auto Workflow · " + definition.nodes.length + " 节点 · " + definition.edges.length + " 边";
     const status = $("status");
-    status.className = "status " + (state.run ? state.run.status : "");
-    status.textContent = state.run ? (STATUS[state.run.status] || state.run.status) : "未运行";
-    $("graphHint").textContent = (state.run?.tokens?.length || 0) + " 次执行 · 拖拽/滚轮缩放";
+    status.className = "status " + (Object.hasOwn(STATUS, state.run?.status) ? state.run.status : "");
+    status.textContent = safeText(state.run ? (STATUS[state.run.status] || state.run.status) : "未运行");
+    $("graphHint").textContent = "活跃/容量 · 排队/等待 · 拖拽/滚轮缩放";
     const command = state.permissions?.command;
     const http = state.permissions?.http;
     const commandText = command?.mode === "full" ? "完整" : command?.mode === "allowlist" ? "白名单" : "关闭";
@@ -963,12 +1053,17 @@ button { cursor: pointer; }
   }
 
   async function action(name) {
-    if (busy || !state) return;
-    if (name === "refresh") return load();
+    if (busy) return;
+    if (name === "refresh") { catalogueLoaded = false; return load(); }
+    if (!state) return;
     if (name === "stop") {
-      await postJson(API + "/stop", {session: SESSION});
-      toast("已请求停止；等待当前执行清理并保存状态");
-      return load();
+      busy = true; renderRun();
+      try {
+        applyState(await postJson(API + "/stop", { session: SESSION }));
+        toast("已请求停止原生作业；等待当前执行清理并保存状态");
+        await load();
+      } finally { busy = false; render(); }
+      return;
     }
     if (name === "run") {
       if (!state.run?.runId) return;
@@ -1009,39 +1104,32 @@ button { cursor: pointer; }
   async function decide(tokenId, outcome) {
     if (busy || !state) return;
     const field = [...document.querySelectorAll("[data-note]")].find(item => item.dataset.note === tokenId);
-    const note = field?.value.trim() ?? "";
-    const continuous = state.control?.continuous !== false;
-    busy = true;
+    const note = field?.value.trim() ?? noteDrafts.get(tokenId)?.trim() ?? "";
+    if (note) noteDrafts.set(tokenId, note);
+    busy = true; render();
     try {
       applyState(await postJson(API + "/decide", { session: SESSION, runId: state.run?.runId, tokenId, outcome, output: note ? { note } : null }));
-      if (continuous && state.run?.runId) {
-        applyState(await postJson(API + "/run", { session: SESSION, runId: state.run.runId }));
-      }
       noteDrafts.delete(tokenId);
-      render();
-      toast("已记录决策：" + outcome + (state.run?.execution?.active ? "，后续节点后台执行中" : ""));
+      toast("已记录此数据包的决策：" + outcome + "；其他数据包继续独立流转");
     } catch (error) {
       toast(error.message, true);
     } finally {
-      busy = false;
+      busy = false; render();
     }
   }
 
-  async function setContinuous(value) {
-    if (!state) return;
+  async function setControl(update) {
+    if (!state || busy) { renderControl(); return; }
+    busy = true; renderControl(); renderDetail();
     try {
-      const result = await postJson(API + "/control", { session: SESSION, continuous: value });
-      state.control = result.control;
-      if (value && state.run?.runId && !["done", "failed", "interrupted"].includes(state.run.status)) {
-        applyState(await postJson(API + "/run", { session: SESSION, runId: state.run.runId }));
-      }
-      render();
+      applyState(await postJson(API + "/control", { session: SESSION, ...update }));
     } catch (error) {
       toast(error.message, true);
     } finally {
-      renderControl();
+      busy = false; render();
     }
   }
+  async function setContinuous(value) { return setControl({ continuous: value }); }
 
   $("refresh").addEventListener("click", () => action("refresh"));
   $("runBtn").addEventListener("click", () => action("run"));
@@ -1052,13 +1140,36 @@ button { cursor: pointer; }
   $("fitAll").addEventListener("click", () => fitView("all"));
   $("fitOne").addEventListener("click", () => fitView("one"));
   $("closeDetail").addEventListener("click", () => { selected = null; renderDetail(); });
+  $("humanTodo").addEventListener("input", event => {
+    const field = event.target.closest("[data-note]");
+    if (field) noteDrafts.set(field.dataset.note, field.value);
+  });
   $("humanTodo").addEventListener("click", event => {
     const button = event.target.closest("[data-token][data-outcome]");
-    if (button) decide(button.dataset.token, button.dataset.outcome);
+    if (button) { decide(button.dataset.token, button.dataset.outcome); return; }
+    const link = event.target.closest("[data-select-node]");
+    if (link) selectNode(link.dataset.selectNode);
+  });
+  $("queueList").addEventListener("click", event => {
+    const link = event.target.closest("[data-select-node]");
+    if (link) selectNode(link.dataset.selectNode);
   });
   $("detailBody").addEventListener("change", event => {
+    const toggle = event.target.closest("[data-node-enabled]");
+    if (toggle) { setControl({ nodeId: toggle.dataset.nodeEnabled, enabled: toggle.checked }); return; }
+    if (!state || state.run?.execution?.active || busy) return;
+    const effort = event.target.closest("[data-model-effort]");
+    if (effort) {
+      const node = state.definition.nodes.find(item => item.id === selected);
+      if (!node || node.type !== "agent") return;
+      const draft = modelDraft(node), candidate = draft.models[Number(effort.dataset.modelIndex)];
+      if (!candidate || (effort.value && !reasoningOptions(candidate).some(option => option.id === effort.value))) return;
+      if (effort.value) candidate.reasoningEffort = effort.value;
+      else delete candidate.reasoningEffort;
+      draft.dirty = true; refreshModelPicker(); return;
+    }
     const checkbox = event.target.closest("[data-model-check]");
-    if (!checkbox || state.run?.execution?.active) return;
+    if (!checkbox) return;
     const node = state.definition.nodes.find(item => item.id === selected);
     if (!node || node.type !== "agent") return;
     const draft = modelDraft(node);
@@ -1074,6 +1185,11 @@ button { cursor: pointer; }
   });
 
   $("detailBody").addEventListener("click", event => {
+    if (!state?.definition) return;
+    const ref = event.target.closest("[data-ref]");
+    if (ref) { loadArtifact(ref.dataset.ref); return; }
+    if (event.target.closest("[data-close-artifact]")) { openedArtifact = null; renderDetail(); return; }
+    if (event.target.closest("[data-load-history]")) { loadHistory(selected); return; }
     const node = state.definition.nodes.find(item => item.id === selected);
     if (event.target.closest("[data-model-save]")) {
       if (node) saveNodeModels(structuredClone(modelDraft(node).models));
@@ -1081,10 +1197,11 @@ button { cursor: pointer; }
     }
     if (event.target.closest("[data-model-clear]")) { saveNodeModels([]); return; }
     const action = event.target.closest("[data-model-action]");
-    if (action && node && !state.run?.execution?.active) {
+    if (action && node && !state.run?.execution?.active && !busy) {
       const draft = modelDraft(node), index = Number(action.dataset.modelIndex);
       if (!Number.isInteger(index) || index < 0 || index >= draft.models.length) return;
       if (action.dataset.modelAction === "remove") draft.models.splice(index, 1);
+      else if (action.dataset.modelAction === "default-effort") delete draft.models[index].reasoningEffort;
       else {
         const next = index + (action.dataset.modelAction === "up" ? -1 : 1);
         if (next < 0 || next >= draft.models.length) return;
@@ -1096,9 +1213,7 @@ button { cursor: pointer; }
     }
     const link = event.target.closest("[data-select-node]");
     if (!link) return;
-    selected = link.dataset.selectNode;
-    renderGraph(); renderDetail();
-    $("detailCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    selectNode(link.dataset.selectNode);
   });
 
   const graphElement = $("graph");
@@ -1142,19 +1257,14 @@ button { cursor: pointer; }
     if (suppressClick) { suppressClick = false; return; }
     const node = event.target.closest("[data-node]");
     if (!node) return;
-    selected = node.getAttribute("data-node");
-    renderGraph();
-    renderDetail();
-    $("detailCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    selectNode(node.getAttribute("data-node"));
   });
   $("graph").addEventListener("keydown", event => {
     if (event.key !== "Enter" && event.key !== " ") return;
     const node = event.target.closest("[data-node]");
     if (!node) return;
     event.preventDefault();
-    selected = node.getAttribute("data-node");
-    renderGraph();
-    renderDetail();
+    selectNode(node.getAttribute("data-node"), false);
   });
   window.addEventListener("resize", () => { if (view.initialized) applyView(); });
 

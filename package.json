@@ -1,13 +1,13 @@
 {
-  "name": "dsh-agent-team-workflow",
-  "version": "2.7.3",
+  "name": "dsh-auto-workflow",
+  "version": "1.0.0",
   "private": false,
-  "description": "DSH plugin for user-defined node-graph workflows: agent, command, HTTP, human, fan-out/join and subworkflow nodes with permissions, artifacts and a live web board.",
+  "description": "DSH plugin for persistent, concurrent node-graph workflows: agent, command, HTTP, human, fan-out/join, gate and subworkflow nodes with ordered model fallback, permissions, artifacts and a live board.",
   "type": "module",
   "license": "MIT",
   "engines": {
     "node": ">=22.5.0",
-    "dsh": ">=0.2.1-rc.2"
+    "dsh": ">=0.2.1-rc.5"
   },
   "exports": {
     ".": "./src/v2/plugin.mjs",
@@ -18,16 +18,18 @@
   "files": [
     "src/v2",
     "lib",
-    "examples",
     "docs",
+    "scripts/verify-release.mjs",
     "cordis.patch.yml",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "node tests/run.mjs",
-    "test:runner": "node --test \"tests/*.test.mjs\"",
-    "test:watch": "node --test --watch tests/"
+    "test:runner": "node --test tests/run.mjs",
+    "test:watch": "node --test --watch tests/run.mjs",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "main": "./src/v2/plugin.mjs",
   "keywords": [
@@ -36,7 +38,7 @@
     "deepseek-harness",
     "workflow",
     "node-graph",
-    "agent-teams",
+    "auto-workflow",
     "subagents"
   ],
   "dsh": {

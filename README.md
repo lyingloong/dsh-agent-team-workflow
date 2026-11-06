@@ -1,393 +1,93 @@
-# dsh-agent-team-workflow
+# Auto Workflow
 
-> A node-graph workflow runtime for DeepSeek Harness: agent, command, HTTP, human, fan-out/join and sub-workflow nodes, with artifacts, permissions and a live web board.
+**Auto Workflow**（包名 `dsh-auto-workflow`）是 DeepSeek Harness 的持久化、并发节点图工作流插件。它让模型、命令和人工决策在同一张图中协作：新任务以独立 packet 进入，某项等待 Human 审批时，其他任务仍可继续。
 
-`dsh-agent-team-workflow` is a DSH plugin. A workflow is a graph of typed nodes;
-edges choose the next node from an outcome. The runtime owns scheduling and
-permissions; nodes do the work.
+**“Auto”指已授权流程的持续调度，不是免审批。** Host 常驻期间，空闲或 Human 等待不会结束运行；状态与数据引用会落盘。Host 停止、插件重载或执行中断后，不自动重放不确定的工作，也不承诺跨 Git/HTTP 的掉电事务。
 
-**Status:** v2 node runtime. The v2 node runtime replaces the old stage/kanban engine
-entirely. There is no v1 compatibility layer, state migration or dual tool set.
+首个公开发布为 **v1.0.0**。仓库地址保留为 [lyingloong/dsh-agent-team-workflow](https://github.com/lyingloong/dsh-agent-team-workflow)。
 
-## Concepts
+## 安装
 
-| Term | Meaning |
-| --- | --- |
-| Definition | `apiVersion: 2` JSON: providers, nodes, edges, entry. |
-| Node | One typed unit: `agent`, `command`, `http`, `human`, `fanout`, `join`, `gate`, `subworkflow`. |
-| Edge | `{from, to, on}`; `on` is an outcome, default `complete`. |
-| Token | One execution of a node. A run has many tokens. |
-| Run | One workflow execution with input, context and tokens. |
-| Artifact / context | Node outputs stored under `context.nodes.<id>`; mapped into later nodes. |
-| Permission grant | User-approved command/HTTP capability, stored with the workflow. |
-| Lane | A provider route: `adapter`, `model`, `reasoningEffort`, `maxTokens`. |
+要求 Node.js **22.5+**、DeepSeek Harness **0.2.1-rc.5+**（首发已验证 rc.5）；开发示例还需要 Git 和可用的模型工具环境。以下使用 `desktop` profile，请按实际配置替换。
 
-State is per DSH session under `<dataDir>/sessions/<sessionId>`:
-
-- `workflow.json` — definition + permission grant;
-- `runs/<runId>.json` — token state, context, status.
-
-Writes are atomic JSON, with checkpoints before and after every node. Runs bind a repository cwd at start. Host shutdown preserves evidence but does not automatically replay uncertain in-flight work. See [run lifecycle and troubleshooting](docs/run-lifecycle.md).
-
-## Install
+推荐固定 release，避免随开发分支变化：
 
 ```bash
-# from GitHub
-dsh plugin --profile desktop add github:lyingloong/dsh-agent-team-workflow
-
-# or from a local checkout
-dsh plugin --profile desktop add /absolute/path/to/dsh-agent-team-workflow
-
-# restart the Harness process, then refresh the Web GUI
+dsh plugin --profile desktop add github:lyingloong/dsh-agent-team-workflow#v1.0.0
 ```
 
-Package: `dsh-agent-team-workflow`. Requires Node.js >= 22.5.
-
-## Use from a session
-
-Describe the workflow in natural language. The model composes a definition and
-calls the tools:
-
-> 创建一个自动开发的工作流：一个实现者、一个测试命令、一个审查者；审查不通过回到实现，通过后我批准才合并。
-
-The model will ask before granting command/HTTP access. Typical sequence:
-
-1. `team_workflow_define` — validate and store the definition and the permission grant.
-2. `team_workflow_start` — bind the absolute target `cwd`, preflight, and create a run with input.
-3. `team_workflow_run` — dispatch a session-owned job and return immediately; collect it with `job_output`, stop it with `job_kill`.
-4. `team_workflow_decide` — resolve a waiting human node.
-5. `team_workflow_status` — inspect the definition and latest run.
-
-### Tools
-
-| Tool | Purpose |
-| --- | --- |
-| `team_workflow_define` | Validate and store a definition plus permission grant. |
-| `team_workflow_start` | Bind a repository cwd and preflight a new run; history is preserved. |
-| `team_workflow_run` | Start/find a managed job; return cwd, jobId and current-node progress without blocking. |
-| `team_workflow_decide` | Resolve a waiting human token. |
-| `team_workflow_status` | Read persisted cwd/job/current-token/checkpoint/error state without executing anything. |
-
-## Permissions
-
-Permissions are never part of the definition. The session must ask the user
-before creating a workflow that uses `command` or `http` nodes.
-
-```json
-{
-  "command": { "mode": "allowlist", "allow": ["pnpm", "node"] },
-  "http": { "mode": "allowlist", "allow": ["api.github.com"] }
-}
-```
-
-Modes: `deny` (default), `allowlist`, `full`. The runtime checks each command
-string or HTTP host before the executor runs. A denied node fails with
-`permission_denied`; it is not retried. If the user does not grant access, design
-a restricted workflow (agent/human/fanout/join only) or use an allowlist.
-
-## Definition
-
-```json
-{
-  "apiVersion": 2,
-  "name": "dev-team",
-  "entry": "seed",
-  "providers": [
-    { "id": "default", "adapter": "deepseek", "model": "host-default" }
-  ],
-  "nodes": [
-    { "id": "seed", "type": "human", "config": { "outcomes": ["approve", "reject"] } },
-    {
-      "id": "implement",
-      "type": "agent",
-      "role": "engineer",
-      "inputs": { "request": "$input.request" },
-      "config": { "lane": "default", "prompt": "Implement the request." }
-    },
-    {
-      "id": "test",
-      "type": "command",
-      "config": { "command": "pnpm test", "timeoutMs": 300000 }
-    },
-    {
-      "id": "review",
-      "type": "agent",
-      "role": "reviewer",
-      "inputs": { "implementation": "$nodes.implement.output", "tests": "$nodes.test.output" },
-      "config": { "outcomes": ["pass", "needs_revision"], "prompt": "Review the change." }
-    },
-    { "id": "merge", "type": "human", "config": { "outcomes": ["approve", "reject"] } }
-  ],
-  "edges": [
-    { "from": "seed", "to": "implement", "on": "approve" },
-    { "from": "implement", "to": "test", "on": "complete" },
-    { "from": "test", "to": "review", "on": "complete" },
-    { "from": "review", "to": "merge", "on": "pass" },
-    { "from": "review", "to": "implement", "on": "needs_revision" }
-  ]
-}
-```
-
-### Node types
-
-| Type | Config | Behavior |
-| --- | --- | --- |
-| `agent` | `role?`, `prompt?`, `lane?`, `provider?`, `model?`, `models?`, `cwd?`, `outcomes?`, `outcome?` | Spawns a DSH subagent. The child returns JSON `{outcome, output}`; plain text becomes `{text}`. |
-| `command` | `command`, `cwd?`, `timeoutMs?` | Runs a shell command in the session cwd. Exit 0 → `complete`; non-zero → `fail`. |
-| `http` | `url`, `method?`, `headers?`, `body?`, `timeoutMs?` | `fetch`; 2xx → `complete`, otherwise `fail`. |
-| `human` | `title?`, `outcomes?` | Waits for `team_workflow_decide` or the web board. Default outcomes: `approve`, `reject`. |
-| `fanout` | `items`, `target`, `join` | Resolves `items` to an array and creates one branch token at `target`; each branch receives `$item` and `$index`. |
-| `join` | `mode: all\|any\|quorum`, `count?` | Aggregates branch outputs; `all` waits for every branch. |
-| `gate` | none | Continuous-run switch. Passes when the session control is enabled; otherwise waits for the queue to accumulate. |
-| `subworkflow` | `definition` | Runs an inline nested definition and exposes its context as the node output. |
-
-Agent nodes use the lane's `adapter/model/reasoningEffort/maxTokens` as subagent
-`agentOptions`. `model: "host-default"` inherits the host model. An explicit
-`provider`/`model` on the node overrides the lane and selects the executor;
-`cwd` is forwarded to the subagent as its starting directory; relative paths
-resolve against the session working directory.
-
-An agent node can instead carry an ordered `models` fallback list:
-
-```json
-"models": [
-  { "provider": "provider-a", "model": "model-1" },
-  { "provider": "provider-b", "model": "model-2" }
-]
-```
-
-The executor tries them in order on a subagent/provider error; a task `fail`
-outcome is not a provider error and is returned as the node outcome. The board
-shows the ordered list; definitions are edited by the session model through the
-tools.
-
-A command exits 0 for `complete` and non-zero for `fail`. A `fail` outcome must
-have an outgoing `on: "fail"` edge; otherwise the run itself fails with
-`unhandled_failure` instead of silently reporting `done`.
-
-### Inputs and outputs
-
-Values in `inputs` are resolved from:
-
-- `$input` — the run input object;
-- `$nodes.<id>.output` — a previous node's output;
-- `$item`, `$index` — fan-out branch values;
-- `$context` — the whole run context.
-
-A completed node's output is stored at `context.nodes.<id>` and is available to
-later nodes. The join node's output is an array of branch records:
-`[{branch, outcome, output}, ...]`.
-
-### Edges
-
-An edge is taken when the node outcome equals `on`. No matching edge makes the
-token terminal. Several edges with the same outcome create parallel branches.
-Agent nodes can return one of their configured `outcomes`, which makes review
-pass/fail loops ordinary graph edges.
-
-## Fan-out / join
-
-```json
-{
-  "id": "split",
-  "type": "fanout",
-  "config": { "items": "$input.items", "target": "work", "join": "join" }
-}
-```
-
-Start with `{"items": [1, 2, 3]}`. The fanout node creates three tokens at
-`work`; each sees `$item` and `$index`. `join` waits according to its mode, then
-its output is the aggregated branch array.
-
-A join waits internally for its branches; that wait is not a human decision. The
-`waiting` list from `team_workflow_run`, `team_workflow_status`, the web board and the
-Web API contains only `human` node tokens, and `team_workflow_decide` rejects a
-join token with `not_decidable`.
-
-## Sub-workflow
-
-```json
-{
-  "id": "child",
-  "type": "subworkflow",
-  "inputs": { "value": "$input.value" },
-  "config": { "definition": { "apiVersion": 2, "name": "child", "entry": "work", "nodes": [], "edges": [] } }
-}
-```
-
-The nested run shares the parent's permission grant and executors. A nested
-human wait is currently not supported: the child must reach `done` before the
-subworkflow node completes.
-
-## Auto-dev reference
-
-[examples/auto-dev-full.json](examples/auto-dev-full.json) is the complete
-continuous two-source development loop:
-
-```text
-Continuous switch (gate)
-  → Intake requirement
-      ├─ user  ─────────────────────────→ Record requirement
-      └─ mined → Requirement analyst → risk
-           ├─ low  ────────────────────→ Record requirement
-           └─ mid/high → Approve mined requirement (human)
-                 ├─ approve ───────────→ Record requirement
-                 └─ reject → Requirement analyst (note)
-Record requirement
-  → Plan → branch → Implement → npm test → Review
-      ├─ needs_revision / test fail → Implement
-      └─ pass → Open PR → Human review pool (human/AI)
-            ├─ approve → Merge → Complete requirement → Continuous switch
-            └─ reject → Implement (with note)
-```
-
-The continuous switch is read before every next node, including repair loops.
-When it is off, the current node finishes and the next node does not start; new user requirements and mined seeds can still be appended
-to the repository queue. When it is on, `team_workflow_run` wakes the gate and
-the next queued requirement runs. The engine is serial, so processing is one
-requirement at a time.
-
-`requirements/requirements.json` is the queue and requirement registry. Entries
-with `status: queued` are pending; the intake agent prefers `source=user`,
-`priority=0`, then queue order. A completed item is marked `status: done` by the
-Complete requirement node. The requirement analyst writes the mined seed pool to
-`requirements/seeds.json`.
-
-Requirement rules:
-
-- **User-provided requirements** have `source=user`, `priority=0`, are recorded
-  in `requirements/requirements.json`, and bypass requirement approval.
-  `addToSeedPool` can optionally add related seed entries.
-- **Mined requirements** come from the analyst's seed pool. The analyst reads
-  `poolPath` or `requirements/seeds.json`, chooses one `ready` seed and may only
-  mark it `claimed`.
-- A separate risk agent emits `low`, `mid` or `high`. Low risk records directly;
-  mid/high wait at the human `Approve mined requirement` node. Rejecting it, or
-  asking for adjustments, sends it back to the analyst with the note.
-- Requirements and seeds carry tags; the analyst/register prompts own the pool
-  files. Pools are repository data plus prompt policy, not runtime queues.
-  Sample data: [docs/requirements.json](docs/requirements.json) and
-  [docs/requirements-seeds.json](docs/requirements-seeds.json).
-
-The reviewer agent either sends the change back to implementation or opens the
-PR. The PR then waits in the `Human review pool` node. A human or an external AI
-with access to `team_workflow_decide` can approve/reject; the board also offers a
-note field, and the note is passed to implementation. GitHub PR comments remain
-the place for threaded PR feedback.
-
-The switch can be toggled on the board. Turning it on dispatches a job to wake
-resumable paused work; turning it off pauses at the next node boundary. Failed
-or interrupted work requires inspection, not an automatic replay. The board also shows the queued requirements and ready
-seed count.
-
-It requires a command grant for `git`, `npm` and `gh` (the workflow is defined
-with that allowlist), a configured `gh` login, and a session whose cwd is the
-target repository. The example uses a fixed branch and attempts to reuse its PR. This is not an
-exactly-once transaction; inspect branch/PR state before restarting interrupted
-work or processing another item.
-`team_workflow_run` executes until a human node; the web board or another run
-call continues after the decision.
-
-[examples/auto-dev.json](examples/auto-dev.json) is the smaller discovery →
-branch → implement → test → review → PR → human decision → merge variant.
-
-Each cycle selects one seed; the pools remain prompt-managed files, and one PR
-is reviewed at a time. The explicit cycle boundary consumes the initial user
-request once and clears prior-item node feedback while retaining goal/poolPath.
-
-## Web board
-
-The conversation header has one **工作流** action. It opens the standalone board
-in DSH's native Browser tab; the previous right-sidebar panel has been removed.
-
-The board is graph-first:
-
-- a compact header with workflow name, run status, node/edge count and
-  permission state;
-- a node graph with a word-aware two-line title, role/model or command/HTTP
-  detail, status dot and run count; node types keep their own glyph and accent;
-- drag the graph to pan, use the wheel to zoom around the pointer, and use the
-  graph controls for fit/actual-size; layered channel routing keeps forward edges
-  in the gaps between ranks and gives feedback edges their own side lanes, so
-  edges do not cut through cards; outcome labels sit beside their lines;
-- clicking a node opens its detail card **below the graph**, with latest output,
-  token input, run context, node config, errors, token history, attempt/model
-  metadata and clickable upstream/downstream links; agent nodes include a model
-  multi-model checklist backed by the host model catalog and node-model API.
-  Select up to 8 candidates, reorder with ↑/↓, then save. Network/provider
-  call errors try the next candidate; a valid negative review is not a call error.
-  Cancellation, the overall node deadline, and invalid routing output stop rather
-  than switching models. Each node attempt starts from the first candidate;
-  this is ordered failover, not round-robin load balancing;
-- model/development nodes have no default wall-clock deadline; Stop is explicit.
-  Positive timeouts are opt-in, and step budgets yield automatically within the
-  same managed job rather than ending a long workflow;
-- the **运行** card shows the bound cwd, job id, current node/child, last checkpoint,
-  errors, Continue, Stop and the continuous switch; turning it off pauses at the
-  next node boundary, not only at gates;
-- a **需求队列** card shows queued user requirements and ready seed count;
-- a separate **Human 待办** card lists every waiting human token with a count,
-  outcome buttons, a freeform note field and recent human decisions. Notes are
-  sent as the decision output and flow to the analyst or implementation node;
-- the board does not start or replace runs: the assistant starts one; the board
-  observes it and continues it after a decision.
-
-The board deliberately stays an observer/light controller, not a workflow
-builder: the session model authors definitions through the tools. It can only
-run a session whose Agent has been observed by a tool call; after a host restart,
-call a workflow tool to re-establish the live session association first. A run
-interrupted by shutdown is preserved for inspection, never silently replayed.
-
-## Board URL and native Browser tab
-
-The board is served by a dedicated token-protected loopback HTTP server bound to
-`127.0.0.1` on an ephemeral port. The single **工作流** header action opens it
-through DSH's native Browser tab:
-
-```js
-ctx.sidebarRight.openTab('browser', { params: { url } })
-```
-
-The Browser tab refuses the DSH application origin. The board therefore uses
-a dedicated loopback origin instead of framing the application itself. The URL is:
-
-```
-http://127.0.0.1:<board-port>/plugins/dsh-agent-team-workflow/public/board?session=<session-id>&token=<token>
-```
-
-`team_workflow_status` returns this as `boardUrl`. The server is loopback-only,
-token-protected and has no DSH Connection fence; it is a second loopback port,
-not the Harness web server. Do not share the URL: the token grants board access.
-
-The page observes a run and continues it after a human decision (the latter uses
-the last Agent observed for the session). It does not start runs; the assistant
-starts them with `team_workflow_start`. Node details open below the graph. If the
-native Browser tab is unavailable, the action falls back to navigating the
-current page to the board.
-
-![Web board preview](docs/board-preview.png)
-
-## Development
+也可从 [v1.0.0 Release](https://github.com/lyingloong/dsh-agent-team-workflow/releases/tag/v1.0.0) 下载 `.tgz`，或安装本地 checkout：
 
 ```bash
-npm test                         # v2 tests in one process
-node --test "tests/*.test.mjs"   # standard runner
+dsh plugin --profile desktop add /absolute/path/dsh-auto-workflow-1.0.0.tgz
+dsh plugin --profile desktop add /absolute/path/dsh-agent-team-workflow
 ```
 
-Coverage: definition/runtime/store, DSH tools, web API and client bundle.
-No v1 tests or code remain; see [AGENTS.md](AGENTS.md).
+安装后重启 DSH Host，再刷新 Web GUI。安装插件**不会**把示例脚本复制到业务仓库，也不会自动启动工作流。
 
-## Security
+## 快速使用：持续开发一个本地 GitHub clone
 
-- `command` and `http` are privileged. Default deny; grant only what the user
-  approved.
-- `command` runs in the session working directory with a timeout and a bounded
-  output buffer. It is not a sandbox; a `full` grant is real host execution.
-- The private `/plugins/dsh-agent-team-workflow/api` routes are same-origin and
-  require the DSH Connection authentication fence. The board's own loopback
-  server is token-protected and only reads/writes the session data directory.
-- `subworkflow` inherits the parent's grant; it cannot widen permissions.
+唯一主示例是 [GitHub 项目本地持续开发](<docs/examples/development/README.md>)，不是远端 Issue/PR 机器人。
 
-## License
+1. **准备项目**：克隆你有权修改的 GitHub 仓库，在本地建立一个共享集成批次分支；把示例脚本 materialize 到项目内并本地提交，使 checkout 干净。选择项目外的绝对、canonical `dataRoot`。
+2. **输入真实需求**：初始化业务存储，提交用户需求或已有证据 seed。用户需求优先级固定为 `0`；示例不监听所有聊天，也不自动抓取 GitHub Issues。
+3. **授权并定义**：检查 [示例图](<docs/examples/development/workflow.json>) 与模型提示词，明确批准命令 allowlist，再调用 `auto_workflow_define`。HTTP 默认拒绝；agent 工具权限另行控制。
+4. **开始运行**：`auto_workflow_start` 绑定项目的绝对 `cwd` 和 `{ "dataRoot": "…" }`；`auto_workflow_run` 挂载运行。在同一 run 中向 `mine-gate` **仅 enqueue 一次** producer，后续需求继续送入现有运行。
+5. **人工决策**：在会话顶部的 **工作流** 看板或 `auto_workflow_decide` 处理具体 Human 项。审批后只在本地集成，默认连合并后的 worktree 也保留。远端 push/PR 必须另行获得明确授权并手动执行。
 
-MIT
+### 主业务图
+
+```mermaid
+flowchart TD
+  U[用户 intake · priority 0] --> Q[稳定 ID 的需求队列]
+  S[已有证据 seeds] --> M[周期 producer / 挖掘]
+  M --> Q
+  Q --> R{需求来源与风险}
+  R -->|用户 / 挖掘 low| W[每需求一个保留的 detached worktree]
+  R -->|挖掘 mid / high| H[Human 需求审批]
+  H -->|approve| W
+  H -->|reject + 反馈| A[同 ID 修订需求]
+  A --> R
+  W --> E[engineer 池 · 最多 3]
+  E --> I[冻结 revision / epoch / commit]
+  I --> V[reviewer 池 · 最多 3，每需求一位]
+  V -->|revise| E
+  V -->|pass| G[Human merge 门禁]
+  G -->|revise| E
+  G -->|reject| K[保留，不合并]
+  G -->|approve 精确产物| L[串行本地集成 · 最多 1]
+  L -->|成功| T[验证合并 · 默认 retain]
+  L -->|冲突| C[保留现场 · 人工恢复]
+```
+
+根并发上限为 **6**；命令和挖掘也共享这六个槽位。3+3 是两个工作池上限，不是每项需求三位 reviewer。返修保留同一需求 ID 与 `worktreePath`；**不创建每需求分支**。完整语义见 [业务流程与保证](<docs/workflow-summary.md>)。
+
+## 七个工具
+
+| Tool | 用途 |
+| --- | --- |
+| `auto_workflow_define` | 校验并保存节点图和用户批准的权限。 |
+| `auto_workflow_start` | 绑定不可变项目 `cwd`、预检并创建 run；不执行节点。 |
+| `auto_workflow_run` | 挂载或继续当前会话的常驻 job，立即返回。 |
+| `auto_workflow_enqueue` | 向现有 run 添加独立 packet；新工作不靠重启 run 输入。 |
+| `auto_workflow_decide` | 解决一个指定 Human token，不代替其他审批。 |
+| `auto_workflow_control` | 全局暂停/继续、单节点队列开关，或显式 Stop。 |
+| `auto_workflow_status` | 只读查看队列、并发、Human 待办和私有看板 URL。 |
+
+节点类型包括 `agent`、`command`、`http`、`human`、`fanout`、`join`、`gate`、`subworkflow`。字段与协议见 [插件参考](<docs/plugin-summary.md>)；不要循环轮询 `run`。
+
+## 边界与验证
+
+- 插件负责通用调度和引用；需求优先级、Git worktree、审查与合并策略属于示例业务代码。
+- command/HTTP 权限默认 deny。命令 allowlist 不是文件系统沙箱，也不替代 agent 工具权限。
+- 暂停和禁用节点不会取消在途工作；Stop 不等于回滚。失败或中断后先检查副作用，再显式恢复或新建 run。
+- 单 Host、本地文件锁；不是分布式队列、外部审批服务或 exactly-once Git/HTTP 事务。不自动 push、开 PR、合并远端或部署，也不默认直接推送受保护的 `main`。
+- 包版本 `1.0.0`、定义 `apiVersion: 2`、运行状态 `version: 3`、示例业务存储 `version: 2` 是不同层的版本号，不要求相同。废弃开发序列与迁移边界见 [更新记录](<CHANGELOG.md>)。
+
+已验证范围、真实模型执行概况与限制集中在 [验证说明](<docs/verification.md>)。从源码 checkout 运行完整回归：
+
+```bash
+npm test
+```
+
+继续阅读：[文档导航](<docs/README.md>) · [运行生命周期与排障](<docs/run-lifecycle.md>) · [v1.0.0 发布说明](<docs/releases/v1.0.0.md>)。
