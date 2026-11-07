@@ -148,15 +148,19 @@ test('audit coverage: complete production graph uses real command executor + mod
   const after = await fx.store.get('req-audit');
   assert.equal(after.implementation.artifactRevision, 3);
   assert.equal(after.worktreePath, before.worktreePath);
+  const worktreePath = after.worktreePath;
+  assert.equal(await git(worktreePath, 'rev-parse', '--abbrev-ref', 'HEAD'), 'HEAD');
   await choose('merge-human', 'approve', 'Approve exact reviewed artifact');
   const merged = await fx.store.get('req-audit');
   assert.equal(merged.status, 'merged');
   assert.equal(merged.integration.state, 'verified');
-  assert.equal(await git(merged.worktreePath, 'rev-parse', '--abbrev-ref', 'HEAD'), 'HEAD');
+  assert.equal(merged.worktreePath, null);
+  assert.equal(merged.cleanedWorktreePath, worktreePath);
+  await assert.rejects(lstat(worktreePath), { code: 'ENOENT' });
   assert.equal(await git(fx.repo, 'branch', '--format=%(refname:short)'), 'main');
   assert.equal(fx.state.counts.packetsFailed, 0, JSON.stringify(fx.state.tokens));
   assert.equal(fx.calls.filter(call => call.nodeId === 'miner').length, 1);
-  for (const call of fx.calls.filter(call => ['engineer', 'reviewer'].includes(call.nodeId))) assert.equal(call.cwd, merged.worktreePath);
+  for (const call of fx.calls.filter(call => ['engineer', 'reviewer'].includes(call.nodeId))) assert.equal(call.cwd, worktreePath);
 });
 
 test('audit coverage: real command graph permits simultaneous three engineers plus three reviewers', { timeout: 60_000 }, async t => {
@@ -264,18 +268,15 @@ test('audit regression: approved merge refuses ignored target collisions before 
   assert.equal(await readFile(path.join(repo, 'local-only.txt', 'nested-data'), 'utf8'), 'nested valuable data');
 });
 
-test('audit regression: cleanup retains ignored data even when explicit cleanup was requested', async t => {
+test('audit regression: cleanup force-removes ignored worktree leftovers after verified merge', async t => {
   const { store } = await fixture(t);
   const item = await prepared(store); const artifact = await implemented(store, item);
   await approved(store, item, artifact); await integrate(store, item.id, item.claimId);
-  await writeFile(path.join(item.cwd, 'local-only.txt'), 'valuable worktree-local data\n');
+  await writeFile(path.join(item.cwd, 'local-only.txt'), 'disposable worktree-local data\n');
   assert.equal(await git(item.cwd, 'status', '--porcelain'), '');
-  assert.equal((await cleanup(store, item.id, item.claimId, { cleanup: true })).outcome, 'retained');
-  assert.equal(await readFile(path.join(item.cwd, 'local-only.txt'), 'utf8'), 'valuable worktree-local data\n');
-  assert.equal((await store.get(item.id)).cleanupRetention.reason, 'ignored-files');
-  await rm(path.join(item.cwd, 'local-only.txt')); // Explicit fixture-only data retirement.
   assert.equal((await cleanup(store, item.id, item.claimId, { cleanup: true })).outcome, 'cleaned');
   await assert.rejects(lstat(item.cwd), { code: 'ENOENT' });
+  assert.ok((await store.get(item.id)).cleanedWorktreePath);
 });
 
 test('audit regression: uncertain snapshot reconciles explicitly then resumes the real CLI graph without overwrite', async t => {

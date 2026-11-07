@@ -18,20 +18,28 @@ async function executeStage(name, input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('DSH_WORKFLOW_INPUT must be a JSON object');
   if (name === 'init') {
     const store = await DevelopmentStore.create(input);
-    return result('complete', rootEnvelope(store));
+    const created = await store.ensureBaselineSeeds();
+    return result('complete', { ...rootEnvelope(store), baselineSeeds: created.length });
   }
-  if (['requirement', 'seed', 'claim', 'seed-batch', 'status'].includes(name)) {
+  if (['requirement', 'seed', 'claim', 'seed-batch', 'queue-check', 'status'].includes(name)) {
     const store = await DevelopmentStore.open(absolute(input.dataRoot, 'dataRoot'));
     if (name === 'requirement') return result('queued', store.envelope(await store.upsertRequirement(input.requirement)));
     if (name === 'seed') {
       const seed = await store.upsertSeed(input.seed);
-      return result('queued', { dataRef: store.seedRef(seed.id), cwd: store.config.repoRoot, label: seed.title, seedId: seed.id });
+      return result('queued', { dataRef: store.seedRef(seed.id), cwd: store.config.repoRoot, label: seed.title, seedId: seed.id, dataRoot: store.root });
+    }
+    if (name === 'queue-check') {
+      const maxPending = input.maxPending ?? 3;
+      if (!Number.isInteger(maxPending) || maxPending < 1 || maxPending > 100) throw new Error('maxPending must be 1..100');
+      const pending = await store.pendingCount();
+      return result(pending <= maxPending ? 'mine' : 'skip', { ...rootEnvelope(store), pending, maxPending, reason: pending <= maxPending ? 'backlog-below-watermark' : 'backlog-full' });
     }
     if (name === 'claim' || name === 'seed-batch') {
       const items = await (name === 'claim' ? store.claimBatch(input.batchSize ?? 3) : store.claimSeeds(input.batchSize ?? 3));
       return result(items.length ? 'ready' : 'idle', { ...rootEnvelope(store), items });
     }
-    return result('complete', { ...rootEnvelope(store), counts: (await store.list()).reduce((counts, item) => { counts[item.status] = (counts[item.status] ?? 0) + 1; return counts; }, {}) });
+    const items = await store.list();
+    return result('complete', { ...rootEnvelope(store), counts: items.reduce((counts, item) => { counts[item.status] = (counts[item.status] ?? 0) + 1; return counts; }, {}), pending: await store.pendingCount() });
   }
   if (name === 'record-proposal') {
     const ref = absolute(input.dataRef, 'seed dataRef');

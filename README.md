@@ -30,10 +30,10 @@ dsh plugin --profile desktop add /absolute/path/dsh-auto-workflow
 唯一主示例是 [GitHub 项目本地持续开发](<docs/examples/development/README.md>)，不是远端 Issue/PR 机器人。
 
 1. **准备项目**：克隆你有权修改的 GitHub 仓库，在本地建立一个共享集成批次分支；把示例脚本 materialize 到项目内并本地提交，使 checkout 干净。选择项目外的绝对、canonical `dataRoot`。
-2. **输入真实需求**：初始化业务存储，提交用户需求或已有证据 seed。用户需求优先级固定为 `0`；示例不监听所有聊天，也不自动抓取 GitHub Issues。
+2. **输入真实需求**：初始化业务存储（会放入 baseline discovery seeds），提交用户需求；可选用 `driver seed` 补充相关证据 seed。用户需求优先级固定为 `0`；示例不监听所有聊天，也不自动抓取 GitHub Issues。
 3. **授权并定义**：检查 [示例图](<docs/examples/development/workflow.json>) 与模型提示词，明确批准命令 allowlist，再调用 `auto_workflow_define`。HTTP 默认拒绝；agent 工具权限另行控制。
 4. **开始运行**：`auto_workflow_start` 绑定项目的绝对 `cwd` 和 `{ "dataRoot": "…" }`；`auto_workflow_run` 挂载运行。在同一 run 中向 `mine-gate` **仅 enqueue 一次** producer，后续需求继续送入现有运行。
-5. **人工决策**：在会话顶部的 **工作流** 看板或 `auto_workflow_decide` 处理具体 Human 项。审批后只在本地集成，默认连合并后的 worktree 也保留。远端 push/PR 必须另行获得明确授权并手动执行。
+5. **人工决策**：在会话顶部的 **工作流** 看板或 `auto_workflow_decide` 处理具体 Human 项。审批后只在本地集成；验证合并后默认清理 worktree（含开发期临时文件），提交和不可变记录保留。远端 push/PR 必须另行获得明确授权并手动执行。
 
 ### 主业务图
 
@@ -56,8 +56,8 @@ flowchart TD
   G -->|revise| E
   G -->|reject| K[保留，不合并]
   G -->|approve 精确产物| L[串行本地集成 · 最多 1]
-  L -->|成功| T[验证合并 · 默认 retain]
-  L -->|冲突| C[保留现场 · 人工恢复]
+  L -->|成功| T[验证合并 · 默认清理 worktree]
+  L -->|冲突| X[自动 abort · 同 worktree 返修]
 ```
 
 根并发上限为 **6**；命令和挖掘也共享这六个槽位。3+3 是两个工作池上限，不是每项需求三位 reviewer。返修保留同一需求 ID 与 `worktreePath`；**不创建每需求分支**。完整语义见 [业务流程与保证](<docs/workflow-summary.md>)。

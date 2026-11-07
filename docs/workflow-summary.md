@@ -21,7 +21,7 @@
     revise → 同 ID 返修；reject → 保留，不合并
     approve 精确产物 → 串行本地集成（最多 1）
   → 干净目标上验证已批准 commit 的祖先关系
-  → 默认 retain；清理必须另有明确策略或逐项授权
+  → 默认 after-verified-merge：清理已合并需求的 worktree
 ```
 
 根并发为 **6**，所有节点共享，命令与 miner 也计入其中。3+3 是工作池容量，不是每项需求三轮审查，也不保证始终有六个模型同时工作。返修回到相同 engineer 流程、ID 和 worktree，不以新建需求或分支替代返修。
@@ -31,8 +31,8 @@ Human 等待不占工作槽，不阻挡其他 packet、producer 或新到达的�
 ## 输入来源与持续 producer
 
 - **用户需求**只由获得授权的 intake 调用写入。优先级强制为 `0`，即使风险为 high 也跳过“需求是否开展”的审批；仍必须通过实现 review 与 Human merge 门禁。
-- **挖掘需求**来自事先提供的真实证据 seed，优先级为 `1..9`。low 跳过需求审批，mid/high 必须人工决定。没有 seed 就不调用挖掘模型；无可行动建议的 seed 记为 idle，不凭空制造需求。
-- 默认 `dispatch` 只准入有限批次。要持续处理，在同一 run 中显式向 `mine-gate` enqueue **一个** producer。它每轮经 60 秒 gate、seed claim、detached miner 分支、队列 dispatch、detached 需求分支后返回 gate。
+- **挖掘需求**来自事先提供的真实证据 seed，优先级为 `1..9`。low 跳过需求审批，mid/high 必须人工决定。没有 seed 就不调用挖掘模型；无可行动建议的 seed 记为 idle，不凭空制造需求。初始化会写入一组可选的 baseline discovery seeds（docs、refactor、page、chore、tests、dependency 等），它们只是发现方向，不是证据；miner 找不到具体问题仍应返回 idle。
+- 默认 `dispatch` 只准入有限批次。要持续处理，在同一 run 中显式向 `mine-gate` enqueue **一个** producer。它每轮经 60 秒 gate、backlog 水位检查、seed claim、detached miner 分支、队列 dispatch、detached 需求分支后返回 gate。仅当待实现需求（含 engineering）不超过工程师并发数 3 时才进入挖掘；backlog 更深时只 dispatch 已有队列。
 - 慢模型和 Human 等待不会牵住 detached producer。后续 seed 与用户需求可以继续写入；需要即时处理时可 enqueue 有限 `dispatch`，不要重复启动 producer。
 - 优先级作用于业务队列的 claim；不抢占已经领取/执行的工作，也不承诺重排引擎中已经排队的 token。
 
@@ -60,9 +60,9 @@ Human 等待不占工作槽，不阻挡其他 packet、producer 或新到达的�
 
 集成同时受节点 `concurrency: 1` 与 store 级 integration lock 保护。目标必须在配置的 `baseBranch`、干净且没有正在进行的 merge；批准的 worktree 必须仍是原来的干净 HEAD。推荐把这个本地目标设为**共享集成批次分支**，而非为每需求建分支；如以后需要 GitHub PR，可由用户单独授权后手动提交整个批次。
 
-合并前检查目标中的 ignored 文件与批准 tree 的路径碰撞（含文件/目录前缀与适用时的大小写折叠），碰撞时保留数据、不执行 merge。成功后验证干净目标及已批准 commit 的祖先关系。冲突时同时保留需求 worktree 和目标 Git merge 现场；不自动 abort、reset、force checkout 或重试。其他开发/review 可继续，但共享目标须先人工恢复。
+合并前检查目标中的 ignored 文件与批准 tree 的路径碰撞（含文件/目录前缀与适用时的大小写折叠），碰撞时保留目标数据、不执行 merge。成功后验证干净目标及已批准 commit 的祖先关系。真实 merge 冲突由 `integrate` 自动保存冲突文件/错误、执行 `git merge --abort`、清除旧 merge approval，并把同一需求/同一 worktree 送回 `begin-engineering`；不重试合并、不把冲突当成模型失败。
 
-默认 **`retain`，包括合并后**。初始化时显式选 `after-verified-merge` 或逐项明确 `cleanup:true` 才可尝试清理；仍须复验已合并祖先关系和两个干净 checkout，以无 `--force` 的 `git worktree remove` 移除。任何 ignored 本地数据都会强制 retained，并给出原因/计数，无强制绕过。业务 JSON、不可变记录和清理记录仍保留。
+默认 **`after-verified-merge`**：验证合并后删除 worktree，包括开发期 ignored/untracked 临时文件，使用受控的 `git worktree remove --force`。删除前仍复核批准 commit、祖先关系和 worktree HEAD；拒绝、冲突、未合并状态不清理。业务 JSON、不可变 artifact/review 和 `cleanedWorktreePath` 记录保留。
 
 ## 中断与显式 reconciliation
 

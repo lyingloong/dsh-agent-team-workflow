@@ -158,10 +158,19 @@ export async function integrate(store, id, claimId) {
     await store.save(item);
     try { await git(store.config.repoRoot, 'merge', '--no-ff', '--no-edit', approval.commit); }
     catch (error) {
+      // Conflict is a normal rework edge, not a Human decision. Persist the
+      // evidence, restore the shared target, then return the same item.
       item.status = 'conflict'; item.integration.state = 'conflict';
       item.integration.conflictFiles = (await git(store.config.repoRoot, 'diff', '--name-only', '--diff-filter=U')).split('\n').filter(Boolean);
       item.integration.error = String(error.stderr ?? error.message).slice(0, 2000);
-      return { item, outcome: 'conflict' };
+      await store.save(item);
+      try { await git(store.config.repoRoot, 'merge', '--abort'); }
+      catch (abortError) { throw new Error(`Merge conflict preserved but automatic abort failed: ${String(abortError.stderr ?? abortError.message).slice(0, 1000)}`); }
+      await targetReady(store);
+      item.status = 'engineering-ready'; item.approval = null;
+      item.integration = { ...item.integration, state: 'aborted', abortedAt: new Date().toISOString() };
+      item.feedback.push({ scope: 'integration', artifactRef: approval.artifactRef, note: `Merge conflict auto-aborted; rework against the current ${store.config.baseBranch}` });
+      return { item, outcome: 'revise' };
     }
     await verifyMerged(store, item);
     return { item, outcome: 'merged' };
@@ -194,17 +203,13 @@ export async function cleanup(store, id, claimId, { cleanup: explicitly = false 
     if (item.status !== 'merged' || item.integration?.state !== 'verified') throw new Error('Cleanup requires a verified human-approved merge');
     await verifyMerged(store, item);
     if (!item.worktreePath) return { item, outcome: 'cleaned' };
-    const cwd = await checkedWorktree(store, item); await clean(cwd); await noMerge(cwd);
+    const cwd = await checkedWorktree(store, item);
     if (await git(cwd, 'rev-parse', 'HEAD') !== item.approval.commit) throw new Error('Worktree changed since approval; preserve it');
-    const ignored = await ignoredFiles(cwd);
-    if (ignored.length) {
-      item.cleanupRetention = { reason: 'ignored-files', count: ignored.length, checkedAt: new Date().toISOString() };
-      return { item, outcome: 'retained' };
-    }
+    // The merge is already verified on the integration branch. --force also
+    // removes ignored/untracked development leftovers, as requested; the
+    // approved commit and immutable artifacts/reviews remain outside the worktree.
+    await git(store.config.repoRoot, 'worktree', 'remove', '--force', cwd);
     item.cleanupRetention = null;
-    // No --force, branch deletion, prune or generic directory deletion. The
-    // worktree is detached, so removal cannot leave an orphan requirement branch.
-    await git(store.config.repoRoot, 'worktree', 'remove', cwd);
     item.cleanedWorktreePath = cwd; item.worktreePath = null; item.cleanedAt = new Date().toISOString();
     return { item, outcome: 'cleaned' };
   }), 'integration');

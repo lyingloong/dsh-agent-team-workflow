@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath, lstat } from 'node:fs/promises';
 import { DevelopmentStore, atomicJSON } from '../docs/examples/development/store.mjs';
-import { git, prepare, snapshot, recordReview, integrate, recoverIntegration, cleanup } from '../docs/examples/development/worktrees.mjs';
+import { git, prepare, snapshot, recordReview, integrate, cleanup } from '../docs/examples/development/worktrees.mjs';
 import { stage } from '../docs/examples/development/driver.mjs';
 import { normalizeDefinition } from '../src/definition.mjs';
 import { newRunState, enqueue, run, decide, waitingHumanTokens } from '../src/runtime.mjs';
@@ -69,6 +69,10 @@ test('development graph is generic: continuous detached producer, root 6, one th
   assert.equal(graph.nodes.find(node => node.id === 'integrate').concurrency, 1);
   assert.ok(!('timeoutMs' in engineer.config)); assert.ok(!('timeoutMs' in reviewer.config));
   assert.ok(graph.nodes.find(node => node.id === 'mine-gate').config.delayMs >= 1000);
+  assert.ok(graph.nodes.find(node => node.id === 'queue-check'));
+  assert.ok(!graph.nodes.some(node => node.id === 'conflict-human'));
+  assert.ok(graph.edges.some(edge => edge.from === 'queue-check' && edge.to === 'seed-batch' && edge.on === 'mine'));
+  assert.ok(graph.edges.some(edge => edge.from === 'integrate' && edge.to === 'begin-engineering' && edge.on === 'revise'));
   assert.ok(graph.nodes.find(node => node.id === 'seed-fanout').config.detached);
   assert.ok(graph.nodes.find(node => node.id === 'producer-work').config.detached);
   assert.ok(graph.edges.some(edge => edge.from === 'producer-work' && edge.to === 'mine-gate'));
@@ -122,6 +126,18 @@ test('user priority0 and low-risk mined bypass; mid/high human feedback revises 
     await store.requirementDecision(id, envelope.claimId, { decision: 'approve', expectedRevision: 2 });
     assert.equal((await store.get(id)).requirementApproval.revision, 2);
   }
+});
+
+test('driver init seeds the baseline discovery directions exactly once', async t => {
+  const { root, repo } = await fixture(t);
+  const dataRoot = path.join(root, 'baseline-data');
+  const result = await cli('init', { dataRoot, repoRoot: repo });
+  assert.equal(result.outcome, 'complete');
+  assert.equal(result.output.baselineSeeds, 14);
+  const store = await DevelopmentStore.open(dataRoot);
+  const seeds = await store.claimSeeds(100);
+  assert.equal(seeds.length, 14);
+  assert.ok(seeds.every(seed => seed.origin === 'baseline' && seed.seedId.startsWith('seed-baseline-')));
 });
 
 test('seed ids differ from requirement ids; explicit no-proposal idle and safe data refs', async t => {
@@ -201,7 +217,7 @@ test('a reviewer that changes the pinned worktree cannot record a passing review
   assert.equal(await git(item.cwd, 'rev-parse', 'HEAD'), artifact.commit);
 });
 
-test('clean local merge is human-approved, verified, serialized and retained until explicit cleanup', async t => {
+test('clean local merge is human-approved, verified, serialized and auto-removed after merge', async t => {
   const { store, repo } = await fixture(t);
   const one = await prepared(store, 'req-one'); const first = await implement(store, one); await approve(store, one, first);
   const two = await prepared(store, 'req-two'); const second = await implement(store, two); await approve(store, two, second);
@@ -211,19 +227,17 @@ test('clean local merge is human-approved, verified, serialized and retained unt
     await git(repo, 'merge-base', '--is-ancestor', artifact.commit, 'HEAD');
     assert.equal((await store.get(item.id)).integration.state, 'verified');
     assert.ok((await lstat(item.cwd)).isDirectory());
-    assert.equal((await cleanup(store, item.id, item.claimId)).outcome, 'retained');
+    assert.equal(await git(item.cwd, 'rev-parse', '--abbrev-ref', 'HEAD'), 'HEAD', 'requirement worktree stays detached');
+    assert.equal((await cleanup(store, item.id, item.claimId)).outcome, 'cleaned');
+    await assert.rejects(lstat(item.cwd), { code: 'ENOENT' });
+    assert.equal((await store.get(item.id)).worktreePath, null);
+    assert.equal((await store.get(item.id)).cleanedWorktreePath, item.cwd);
   }
-  assert.equal(await git(one.cwd, 'rev-parse', '--abbrev-ref', 'HEAD'), 'HEAD', 'requirement worktree stays detached');
-  assert.equal(await git(repo, 'branch', '--list', 'development/req-one'), '', 'no per-requirement branch exists');
-  assert.equal((await cleanup(store, one.id, one.claimId, { cleanup: true })).outcome, 'cleaned');
-  await assert.rejects(lstat(one.cwd), { code: 'ENOENT' });
-  assert.equal((await store.get(one.id)).worktreePath, null);
-  assert.equal((await store.get(one.id)).cleanedWorktreePath, one.cwd);
   assert.equal(await git(repo, 'branch', '--list', 'development/req-one'), '', 'cleanup never had a branch to delete');
-  assert.ok((await lstat(two.cwd)).isDirectory());
+  assert.equal(await git(repo, 'branch', '--list', 'development/req-two'), '', 'cleanup never had a branch to delete');
 });
 
-test('real Git conflict never deletes worktree or aborts target; manual resolution is verified before cleanup', async t => {
+test('real Git conflict auto-aborts target and returns the same id/worktree to engineering', async t => {
   const { store, repo } = await fixture(t);
   const item = await prepared(store);
   const artifact = await implement(store, item, { file: 'shared.txt', contents: 'requirement change\n' });
@@ -231,35 +245,36 @@ test('real Git conflict never deletes worktree or aborts target; manual resoluti
   await writeFile(path.join(repo, 'shared.txt'), 'different target change\n');
   await git(repo, 'add', '--all'); await git(repo, 'commit', '-m', 'temporary conflicting target change');
   const conflict = await integrate(store, item.id, item.claimId);
-  assert.equal(conflict.outcome, 'conflict');
+  assert.equal(conflict.outcome, 'revise');
   assert.ok(conflict.item.integration.conflictFiles.includes('shared.txt'));
-  assert.equal(await git(repo, 'rev-parse', 'MERGE_HEAD'), artifact.commit);
-  assert.equal((await store.get(item.id)).worktreePath, item.cwd);
+  assert.equal(conflict.item.status, 'engineering-ready');
+  assert.equal(conflict.item.approval, null);
+  assert.equal(conflict.item.worktreePath, item.cwd);
   assert.ok((await lstat(item.cwd)).isDirectory());
+  await assert.rejects(git(repo, 'rev-parse', '--verify', 'MERGE_HEAD'), 'target merge was aborted');
   await assert.rejects(cleanup(store, item.id, item.claimId, { cleanup: true }), /verified/);
-  await assert.rejects(recoverIntegration(store, item.id, item.claimId, { decision: 'resolved', note: 'Not actually resolved' }), /pending|dirty/);
-  assert.equal(await git(repo, 'rev-parse', 'MERGE_HEAD'), artifact.commit, 'failed recovery preserved merge state');
-  await writeFile(path.join(repo, 'shared.txt'), 'manually resolved change\n');
-  await git(repo, 'add', '--all'); await git(repo, 'commit', '-m', 'temporary manual conflict resolution');
-  const recovered = await recoverIntegration(store, item.id, item.claimId, { decision: 'resolved', note: 'Operator resolved, tested and committed locally' });
-  assert.equal(recovered.outcome, 'merged');
-  await git(repo, 'merge-base', '--is-ancestor', artifact.commit, 'HEAD');
-  assert.ok((await lstat(item.cwd)).isDirectory());
-  assert.equal((await cleanup(store, item.id, item.claimId, { cleanup: true })).outcome, 'cleaned');
+  const ready = await store.get(item.id);
+  const next = await store.beginEngineering(item.id, item.claimId, { expectedRevision: ready.revision, expectedEpoch: ready.engineeringEpoch });
+  assert.equal(next.status, 'engineering');
+  assert.equal(next.engineeringEpoch, ready.engineeringEpoch + 1);
 });
 
-test('explicit operator abort returns same id/worktree to engineering without destructive script recovery', async t => {
-  const { store, repo } = await fixture(t);
-  const item = await prepared(store);
-  const artifact = await implement(store, item, { file: 'shared.txt', contents: 'requirement\n' }); await approve(store, item, artifact);
-  await writeFile(path.join(repo, 'shared.txt'), 'target\n'); await git(repo, 'add', '--all'); await git(repo, 'commit', '-m', 'temporary target conflict');
-  assert.equal((await integrate(store, item.id, item.claimId)).outcome, 'conflict');
-  await git(repo, 'merge', '--abort'); // ONLY this isolated test repo; never a production operation.
-  const recovered = await recoverIntegration(store, item.id, item.claimId, { decision: 'aborted', note: 'Operator aborted; adapt to current target and resubmit' });
-  assert.equal(recovered.outcome, 'revise'); assert.equal(recovered.item.id, item.id);
-  assert.equal(recovered.item.worktreePath, item.cwd); assert.equal(recovered.item.approval, null);
-  assert.ok((await lstat(item.cwd)).isDirectory());
-  await assert.rejects(cleanup(store, item.id, item.claimId, { cleanup: true }), /verified/);
+test('queue-check gates mining by pending implementation backlog and baseline seeds are explicit', async t => {
+  const { store } = await fixture(t);
+  const queued = await cli('queue-check', { dataRoot: store.root, maxPending: 3 });
+  assert.equal(queued.outcome, 'mine');
+  await prepared(store, 'req-engineering-counted');
+  for (let index = 0; index < 3; index++) await store.upsertRequirement(user(`req-gate-${index}`));
+  const full = await cli('queue-check', { dataRoot: store.root, maxPending: 3 });
+  assert.equal(full.outcome, 'skip');
+  assert.equal(full.output.pending, 4);
+  assert.equal((await store.get('req-engineering-counted')).status, 'engineering');
+  await store.upsertSeed({ id: 'seed-extra', title: 'Extra evidence', evidence: 'Concrete local observation' });
+  const seedResult = await store.ensureBaselineSeeds();
+  assert.ok(seedResult.length > 0);
+  const seeds = await store.claimSeeds(100);
+  assert.ok(seeds.some(seed => seed.seedId === 'seed-baseline-docs' && seed.origin === 'baseline'));
+  assert.ok(seeds.some(seed => seed.seedId === 'seed-extra' && seed.origin === 'explicit'));
 });
 
 test('producer cycles independently of disabled workers, claims each seed once and skips model churn when empty', async t => {
@@ -338,7 +353,13 @@ test('whole graph reaches both pool caps of three; one human wait never stalls o
   assert.equal((await store.get('req-graph-arrival')).status, 'human-pending');
   assert.equal(waitingHumanTokens(state).length, 6);
   assert.equal(state.counts.packetsFailed, 0, JSON.stringify(state.tokens));
-  for (const item of await store.list()) assert.ok((await lstat(item.worktreePath)).isDirectory());
+  for (const item of await store.list()) {
+    if (item.status === 'merged') {
+      assert.equal(item.worktreePath, null);
+      assert.ok(item.cleanedWorktreePath);
+      await assert.rejects(lstat(item.cleanedWorktreePath), { code: 'ENOENT' });
+    } else assert.ok((await lstat(item.worktreePath)).isDirectory());
+  }
 });
 
 test('explicit cleanup policy may remove only an already verified merged worktree', async t => {

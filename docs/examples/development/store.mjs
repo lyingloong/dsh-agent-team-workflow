@@ -5,6 +5,25 @@ import { mkdir, readFile, writeFile, rename, readdir, lstat, realpath, rm } from
 import { setTimeout as delay } from 'node:timers/promises';
 
 const directories = ['requirements', 'seeds', 'artifacts', 'reviews', 'worktrees', 'locks'];
+const pendingStatuses = new Set(['queued', 'intake', 'requirement-pending', 'requirement-revision', 'ready', 'preparing', 'engineering-ready', 'engineering']);
+
+/** Baseline discovery directions; actual requirements are still model-proposed. */
+export const baselineSeeds = Object.freeze([
+  { id: 'seed-baseline-docs', title: 'Documentation gaps', evidence: 'Baseline discovery direction. Inspect README, docs, examples and comments; propose only a concrete evidence-backed gap.', tags: ['docs'], category: 'docs' },
+  { id: 'seed-baseline-refactor', title: 'Refactoring opportunities', evidence: 'Baseline discovery direction. Inspect duplication, module boundaries, dead code and awkward interfaces; propose only a bounded improvement.', tags: ['refactor'], category: 'refactor' },
+  { id: 'seed-baseline-page', title: 'Pages and navigation', evidence: 'Baseline discovery direction. Inspect routing, page states, loading/empty/error behavior and navigation; propose only a user-visible gap.', tags: ['page', 'ux'], category: 'page' },
+  { id: 'seed-baseline-chore', title: 'Build and repository chores', evidence: 'Baseline discovery direction. Inspect scripts, CI, dependencies, release and local setup; propose only a concrete maintenance need.', tags: ['chore', 'tooling'], category: 'chore' },
+  { id: 'seed-baseline-tests', title: 'Test coverage gaps', evidence: 'Baseline discovery direction. Inspect tests, fixtures and untested error paths; propose only a measurable missing case.', tags: ['tests'], category: 'tests' },
+  { id: 'seed-baseline-bugfix', title: 'Correctness and regressions', evidence: 'Baseline discovery direction. Inspect recent changes, edge cases and failing behavior; propose only a reproducible defect or regression.', tags: ['bugfix', 'correctness'], category: 'bugfix' },
+  { id: 'seed-baseline-performance', title: 'Performance and resource use', evidence: 'Baseline discovery direction. Inspect hot paths, startup, memory and unnecessary work; propose only a measurable target.', tags: ['performance'], category: 'performance' },
+  { id: 'seed-baseline-security', title: 'Security and data safety', evidence: 'Baseline discovery direction. Inspect input validation, permissions, secrets and destructive paths; propose only a concrete risk reduction.', tags: ['security'], category: 'security' },
+  { id: 'seed-baseline-reliability', title: 'Reliability and error handling', evidence: 'Baseline discovery direction. Inspect retries, cancellation, partial failure and error messages; propose only a reproducible reliability gap.', tags: ['reliability'], category: 'reliability' },
+  { id: 'seed-baseline-ux-accessibility', title: 'UX and accessibility', evidence: 'Baseline discovery direction. Inspect keyboard access, screen-reader semantics, empty states and copy; propose only a concrete usability gap.', tags: ['ux', 'accessibility'], category: 'ux' },
+  { id: 'seed-baseline-data-api', title: 'Data and API contracts', evidence: 'Baseline discovery direction. Inspect schemas, migrations, compatibility and error contracts; propose only a concrete consistency need.', tags: ['data', 'api'], category: 'data' },
+  { id: 'seed-baseline-dx-tooling', title: 'Developer experience and tooling', evidence: 'Baseline discovery direction. Inspect local setup, scripts, diagnostics and dev loop; propose only a concrete friction reduction.', tags: ['dx', 'tooling'], category: 'dx' },
+  { id: 'seed-baseline-observability', title: 'Observability', evidence: 'Baseline discovery direction. Inspect logs, metrics, traces and failure diagnosis; propose only a concrete blind spot.', tags: ['observability'], category: 'observability' },
+  { id: 'seed-baseline-dependencies', title: 'Dependencies and maintenance', evidence: 'Baseline discovery direction. Inspect outdated or risky dependencies and lockfile hygiene; propose only a bounded maintenance need.', tags: ['dependencies'], category: 'dependencies' },
+]);
 /** Only lock admission can emit this: the protected action has NOT started. */
 export class BusinessBusy extends Error {
   constructor(lock) { super(`Business ${lock} lock busy; action not started`); this.code = 'business_busy'; this.lock = lock; }
@@ -46,7 +65,7 @@ export async function atomicJSON(file, value, { immutable = false } = {}) {
 
 export class DevelopmentStore {
   constructor(config) { this.config = config; this.root = config.dataRoot; }
-  static async create({ dataRoot, repoRoot, baseBranch = 'main', cleanupPolicy = 'retain' }) {
+  static async create({ dataRoot, repoRoot, baseBranch = 'main', cleanupPolicy = 'after-verified-merge' }) {
     dataRoot = absolute(dataRoot, 'dataRoot'); repoRoot = await realpath(absolute(repoRoot, 'repoRoot'));
     if (!['retain', 'after-verified-merge'].includes(cleanupPolicy)) throw new Error('Invalid cleanup policy');
     if (typeof baseBranch !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(baseBranch) || baseBranch.includes('..') || baseBranch.endsWith('/') || baseBranch.endsWith('.lock')) throw new Error('Unsafe base branch');
@@ -149,8 +168,32 @@ export class DevelopmentStore {
     return this.locked(async () => {
       const id = seedId(spec.id), file = await this.checkedFile(this.seedRef(id)), previous = await optionalJSON(file);
       if (previous && previous.status !== 'queued') throw new Error('Seed already claimed/proposed; do not create duplicate requirements');
-      const seed = { id, title: text(spec.title, 'seed title', 500), evidence: text(spec.evidence, 'seed evidence'), tags: normalizeTags(spec.tags), order: previous?.order ?? await this.nextOrder(), status: 'queued' };
+      const relatedRequirementId = spec.relatedRequirementId ? requirementId(spec.relatedRequirementId) : null;
+      const seed = {
+        id, title: text(spec.title, 'seed title', 500), evidence: text(spec.evidence, 'seed evidence'),
+        tags: normalizeTags(spec.tags), origin: text(spec.origin ?? 'explicit', 'seed origin', 100),
+        category: spec.category ? text(spec.category, 'seed category', 100) : null,
+        relatedRequirementId, order: previous?.order ?? await this.nextOrder(), status: 'queued',
+      };
       await atomicJSON(file, seed); return seed;
+    });
+  }
+
+  /** Idempotent bootstrap for discovery directions; never overwrites a claimed seed. */
+  async ensureBaselineSeeds(seeds = baselineSeeds) {
+    return this.locked(async () => {
+      const created = [];
+      for (const spec of seeds) {
+        const id = seedId(spec.id), file = await this.checkedFile(this.seedRef(id));
+        if (await optionalJSON(file)) continue;
+        const seed = {
+          id, title: text(spec.title, 'seed title', 500), evidence: text(spec.evidence, 'seed evidence'),
+          tags: normalizeTags(spec.tags), origin: 'baseline', category: text(spec.category, 'seed category', 100),
+          relatedRequirementId: null, order: await this.nextOrder(), status: 'queued',
+        };
+        await atomicJSON(file, seed); created.push(seed);
+      }
+      return created;
     });
   }
   async claimSeeds(limit = 3) {
@@ -160,8 +203,12 @@ export class DevelopmentStore {
       const seeds = await Promise.all(files.map(name => this.checkedFile(path.join(this.root, 'seeds', name)).then(readJSON)));
       const selected = seeds.filter(seed => seed.status === 'queued').sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)).slice(0, limit);
       for (const seed of selected) { seed.status = 'mining'; seed.claimId = randomUUID(); await atomicJSON(this.seedRef(seed.id), seed); }
-      return selected.map(seed => ({ dataRef: this.seedRef(seed.id), cwd: this.config.repoRoot, label: seed.title, seedId: seed.id, claimId: seed.claimId }));
+      return selected.map(seed => ({ dataRef: this.seedRef(seed.id), cwd: this.config.repoRoot, label: seed.title, seedId: seed.id, claimId: seed.claimId, dataRoot: this.root, origin: seed.origin ?? 'explicit', category: seed.category ?? null, relatedRequirementId: seed.relatedRequirementId ?? null }));
     });
+  }
+
+  async pendingCount() {
+    return (await this.list()).filter(item => pendingStatuses.has(item.status)).length;
   }
   async proposeSeed({ seedId: id, claimId, proposal }) {
     return this.locked(async () => {

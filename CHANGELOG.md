@@ -1,5 +1,13 @@
 # 更新记录
 
+## 未发布
+
+- 初始化业务存储时写入 docs/refactor/page/chore/tests/security 等 baseline discovery seeds；它们只是发现方向，不是证据。
+- miner 先发散 3–5 个方向再收敛，覆盖 correctness、reliability、performance、UX/accessibility、tests/observability、security 和 maintainability，并读取现有需求避免重复。
+- 新增 `queue-check`：待实现需求（含 engineering）不超过工程师并发数时才自动挖掘，否则只 dispatch 已有队列。
+- 真实 merge 冲突改为自动 `git merge --abort` 并回同一需求工程返修，不再进入人工冲突节点。
+- 默认 `after-verified-merge`：验证合并后强制删除 worktree 及其 ignored/untracked 临时文件；批准 commit、artifact/review 和清理记录保留。
+
 ## v1.0.0 — 首个公开发布
 
 `dsh-auto-workflow`（短名 Auto Workflow）是 DeepSeek Harness 的持久化、并发节点图工作流插件。仓库为 [lyingloong/dsh-auto-workflow](https://github.com/lyingloong/dsh-auto-workflow)，包名、看板和工具身份统一使用 `dsh-auto-workflow` / `auto_workflow_*`。

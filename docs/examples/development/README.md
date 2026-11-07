@@ -55,15 +55,15 @@ command 节点执行的是固定命令，例如 `node docs/examples/development/
 继续在目标项目根目录运行；以下 `dataRoot` 与项目并列，位于项目外：
 
 ```powershell
-$env:DSH_WORKFLOW_INPUT = '{"dataRoot":"C:/work/project-workflow-data","repoRoot":"C:/work/project","baseBranch":"integration/workflow-batch","cleanupPolicy":"retain"}'
+$env:DSH_WORKFLOW_INPUT = '{"dataRoot":"C:/work/project-workflow-data","repoRoot":"C:/work/project","baseBranch":"integration/workflow-batch","cleanupPolicy":"after-verified-merge"}'
 node docs/examples/development/driver.mjs init
 ```
 
-配置一经初始化不可静默更换。`retain` 是安全默认值，**合并后也保留 worktree**。业务 store 采用 `version: 2`，不等于包版本；旧 store 被拒绝，不迁移或重置。为新格式使用新 canonical root，并保留旧数据检查。
+配置一经初始化不可静默更换。`after-verified-merge` 是默认值：验证合并后自动删除 worktree，包括开发期 ignored/untracked 临时文件；批准 commit、artifact/review 和 `cleanedWorktreePath` 保留。`retain` 仅作为需要保留现场时的显式选择。业务 store 采用 `version: 2`，不等于包版本；旧 store 被拒绝，不迁移或重置。为新格式使用新 canonical root，并保留旧数据检查。`init` 同时写入 docs/refactor/page/chore/tests/security 等 baseline discovery seeds；它们是发现方向，不是证据。
 
 ### 用户 intake
 
-只有获得授权的用户/调用者应提交用户需求；示例不扫描全部聊天：
+只有获得授权的用户/调用者应提交用户需求；示例不扫描全部聊天。主会话写需求后，**可选地**再调用一次 `driver seed` 补充 0–3 个相关证据 seed；不强制、不应为了凑数而复述需求：
 
 ```powershell
 $env:DSH_WORKFLOW_INPUT = '{"dataRoot":"C:/work/project-workflow-data","requirement":{"id":"req-example","source":"user","title":"Concrete requested change","description":"Expected behavior and acceptance checks.","risk":"high","tags":["user"]}}'
@@ -75,6 +75,13 @@ node docs/examples/development/driver.mjs requirement
 - 队列按用户优先、priority、原始 FIFO、稳定 ID 准入。小的 priority 更早；已领取工作不被抢占。
 - 修改 queued 项时，在 `requirement` 对象中携带当前 `expectedRevision`，沿用同 ID、递增 revision 且保留 FIFO。已领取/执行项不能 intake 覆盖，应走反馈返修。
 
+**主会话 intake 协议（建议，不是强制工具流程）：**
+
+1. 用户提出需求时，先调用一次 `driver requirement`；
+2. 可选地再调用 0–3 次 `driver seed`，把需求相关但尚未成为需求的证据/相邻观察写入 seed 池；
+3. seed 必须引用证据位置，不能只是复述需求；没有可靠材料就不写；
+4. 需要立即处理时再 enqueue 一次 `dispatch`，否则由 producer 下一轮领取。
+
 ### 已有证据 seed
 
 ```powershell
@@ -84,7 +91,7 @@ node docs/examples/development/driver.mjs seed
 
 miner 只消费这些实际 seed，读取项目后提出一个具体需求，priority 为 `1..9`。`seed-edge-case` 对应稳定需求 `req-edge-case`；与无关已有需求冲突时失败而非覆盖。没有可行动建议时返回 `proposal:null`，该 seed 记为 idle，不反复调用模型或制造假需求。
 
-**没有 GitHub Issue 自动抓取、外部发现 feed 或全聊天监听。** 后续 seed/用户需求仍由授权调用者显式提供。
+**没有 GitHub Issue 自动抓取、外部发现 feed 或全聊天监听。** 后续 seed/用户需求仍由授权调用者显式提供。seed 可携带 `relatedRequirementId`，帮助 miner 避开对同一需求的重复提案。
 
 ## 3. 定义、运行并只启动一个 producer
 
@@ -123,12 +130,15 @@ miner 只消费这些实际 seed，读取项目后提出一个具体需求，pri
 上面的 JSON 是 `auto_workflow_enqueue` 参数。producer 第一次与后续每轮都经过 60 秒延迟：
 
 ```text
-mine-gate → seed-batch → seed-fanout(detached → miner)
-                     → producer-dispatch → producer-work(detached → route)
-                     → mine-gate
+mine-gate → queue-check
+             ├─ 待实现 ≤ 3 → seed-batch → seed-fanout(detached → miner)
+             │                         → producer-dispatch → producer-work(detached → route)
+             └─ 待实现 > 3 → producer-dispatch
+                            → producer-work(detached → route)
+             → mine-gate
 ```
 
-无 seed 时跳过模型，但仍检查需求队列。miner 晚于本轮 dispatch 完成，其新需求可在下一轮领取。Human 等待与慢 worker 不牵住 detached producer。**每次按 Run 不要重复 enqueue producer。**
+`queue-check` 统计 queued、intake、需求审批、ready、preparing、engineering-ready 和 engineering；待实现超过工程师并发数 3 时暂停新挖掘，只处理已有队列。无 seed 时跳过模型，但仍检查需求队列。miner 晚于本轮 dispatch 完成，其新需求可在下一轮领取。Human 等待与慢 worker 不牵住 detached producer。**每次按 Run 不要重复 enqueue producer。**
 
 新增用户需求后，如需立即准入，可 enqueue `nodeId:"dispatch"`、`input:{"dataRoot":"C:/work/project-workflow-data"}`；否则现有 producer 在后续周期领取。有限 dispatch 不会产生新的持续 producer。
 
@@ -165,27 +175,24 @@ Human 引擎决定由后续 command 转成业务记录；旧需求 revision 的�
 
 正常路径只执行本地 `git merge --no-ff --no-edit <approved commit>`。成功后复验干净 checkout 和已批准 commit 的祖先关系，记录 `merged` / `integration.state:verified`。Git hooks 仍是可信项目代码；不要同时外部修改目标。
 
-若发生冲突或不确定失败，保留需求 worktree 和目标 merge 现场，进入 `conflict-human`。不会自动 abort、reset、强制 checkout、删除或重试。其他开发/review 可以继续，但共享目标必须先恢复，后续集成才能安全进行：
+若发生真实 merge 冲突，`integrate` 会保存冲突文件/错误/pre-merge HEAD，执行 `git merge --abort`，复核目标恢复干净，清除旧 merge approval，并把同一需求/同一 worktree 送回 `begin-engineering`。这是业务 `revise` 边，不是模型失败，也不是自动重试 merge；下一次仍须新 snapshot、review 和 Human 批准。
 
-- **resolved**：授权操作者手工解决冲突、运行验证并完成 merge commit，再提交 `resolved` 与说明。恢复命令验证无 pending merge、干净目标、批准 artifact 和祖先关系。
-- **aborted**：检查现场后显式手工 abort，再提交 `aborted` 与反馈。恢复命令确认干净、无 merge 且批准 commit 未集成，清除旧 merge approval，保留同 ID/worktree 回到开发；仍须新 snapshot、review 和批准。
-
-其他项若因共享目标不干净而失败，不自动重放。先查其运行与业务状态，再明确选择续接阶段。
+其他项若因共享目标不干净或 ignored 碰撞而失败，不自动重放。先查其运行与业务状态，再明确选择续接阶段。
 
 **本图不 push、不开 PR、不远端 merge、不部署。** 如要把成果交到 GitHub，先复核整个 `integration/workflow-batch`，取得针对具体 remote/branch/操作的明确授权，再由操作者手动 push 并为这个**共享批次分支**开 PR。仓库的保护分支、远端 CI 和最终 merge 规则继续适用，不默认直接 push protected `main`，也不为每需求创建远端分支。
 
 ## 6. 保留与清理
 
-默认 `retain`：即使已验证 merge，worktree 仍保留。若要逐项明确清理，使用原 claimed item 的引用与 `claimId`：
+默认 `after-verified-merge`：验证合并后自动删除 worktree，包括开发期 ignored/untracked 临时文件。删除前仍核对批准 commit 在祖先链、worktree HEAD 未变，然后用受控的 `git worktree remove --force` 删除；提交、不可变 artifact/review 和 `cleanedWorktreePath` 记录保留。
+
+如果项目确实需要保留现场，可以在初始化时显式选择 `retain`；这是例外，不是默认。批量或逐项清理仍可用原 claimed item 的引用与 `claimId` 显式请求：
 
 ```powershell
 $env:DSH_WORKFLOW_INPUT = '{"dataRef":"C:/work/project-workflow-data/requirements/req-example.json","claimId":"<original claimId>","cleanup":true}'
 node docs/examples/development/driver.mjs cleanup
 ```
 
-初始化时也可显式选择 `after-verified-merge`。两种清理方式都必须重新核对目标干净、批准 commit 已在祖先链、需求 worktree 干净且 HEAD 未变；仅使用无 `--force` 的 `git worktree remove`。不存在需求分支可删。
-
-未合并、拒绝、等待、脏、停止或冲突的 worktree 不清理。**任何 ignored 数据都会强制 retained**，记录 `cleanupRetention.reason:ignored-files` 及计数，连 `cleanup:true` 也不能绕过。只有授权操作者确认并处理这些数据后，才可再次显式请求清理。需求 JSON、不可变产物/review、`cleanedWorktreePath` 记录保留。
+未合并、拒绝、冲突、等待或未验证的 worktree 不清理。需求 JSON、不可变产物/review、清理记录保留；不存在每需求分支可删。
 
 ## 恢复与排障
 
@@ -233,9 +240,10 @@ item envelope 至少携带业务 `dataRef` / `claimId`，按阶段携带冻结�
 
 | Stage | 额外输入 / 主要行为 |
 | --- | --- |
-| `init` | `dataRoot`、`repoRoot`，可选 `baseBranch`、`cleanupPolicy`；初始化固定配置。 |
-| `requirement` / `seed` | `dataRoot` 与 `requirement` / `seed` 对象；显式 intake。 |
+| `init` | `dataRoot`、`repoRoot`，可选 `baseBranch`、`cleanupPolicy`（默认 `after-verified-merge`）；初始化固定配置并写入 baseline discovery seeds。 |
+| `requirement` / `seed` | `dataRoot` 与 `requirement` / `seed` 对象；显式 intake。seed 可带 `origin`、`category`、`relatedRequirementId`；可选，不强制。 |
 | `claim` / `seed-batch` | `dataRoot`、可选 `batchSize` 1..100（图为 3）；返回 ready items 或 idle。 |
+| `queue-check` | `dataRoot`、`maxPending`；返回 `mine` 或 `skip`，统计待实现（含 engineering）需求。 |
 | `record-proposal` | seed envelope、`proposal` 或 `null`；稳定 ID 需求或 idle seed。 |
 | `route` | claimed item；ready 或 needs_approval。 |
 | `requirement-decision` | 冻结 `expectedRevision`、`decision`，reject 必须 note；revision 绑定决定。 |
@@ -246,9 +254,9 @@ item envelope 至少携带业务 `dataRef` / `claimId`，按阶段携带冻结�
 | `review-input` | 当前 `artifactRef` / `commit`；生成冻结 review 输入，也是对账后的续接入口。 |
 | `record-review` | 精确 artifact/commit、`decision:pass\|revise`，非空字符串 summary/verification/reviewer。 |
 | `merge-decision` | 当前 artifact、decision，返修/拒绝需反馈；精确产物批准。 |
-| `integrate` | 已 Human 批准的 item；merged 或 conflict。 |
-| `recover-integration` | 手工 Git 恢复已完成，`decision:resolved\|aborted`、note。 |
-| `cleanup` | 可选 `cleanup:true`；retained 或经保护检查后的 cleaned。 |
+| `integrate` | 已 Human 批准的 item；merged，或冲突自动 abort 后 `revise`。 |
+| `recover-integration` | 仅异常兜底：操作者已手工恢复 Git 后，`decision:resolved\|aborted`、note；不在主图。 |
+| `cleanup` | 默认 `after-verified-merge` 自动强删已合并 worktree；`retain` 是显式例外。 |
 | `status` / `inspect` | `{dataRoot}` / item envelope；有界业务状态与引用。 |
 
 ## 验证与限制
@@ -259,6 +267,6 @@ item envelope 至少携带业务 `dataRef` / `claimId`，按阶段携带冻结�
 npm test
 ```
 
-[示例测试](https://github.com/lyingloong/dsh-auto-workflow/blob/v1.0.0/tests/development-example.test.mjs) 与 [安全回归](https://github.com/lyingloong/dsh-auto-workflow/blob/v1.0.0/tests/audit-example.test.mjs) 使用可丢弃的真实本地 Git 仓库/worktree，覆盖准入、revision/epoch、3+3 并发、反复 review、Human 反馈、busy、snapshot reconciliation、冲突和保留；自动回归不调用付费模型或远端服务。实际运行仍需要有效模型工具、真实输入及项目专属验证。
+[示例测试](https://github.com/lyingloong/dsh-auto-workflow/blob/main/tests/development-example.test.mjs) 与 [安全回归](https://github.com/lyingloong/dsh-auto-workflow/blob/main/tests/audit-example.test.mjs) 使用可丢弃的真实本地 Git 仓库/worktree，覆盖准入、revision/epoch、3+3 并发、反复 review、Human 反馈、busy、backlog 水位、自动冲突 abort、snapshot reconciliation 和默认清理；自动回归不调用付费模型或远端服务。实际运行仍需要有效模型工具、真实输入及项目专属验证。
 
 这不是多 Host 数据库、身份认证服务或恶意文件系统沙箱。操作者负责可信调用者、数据备份、保留期限、项目适配以及经明确授权的远端发布；不要把“持续运行”解释为自动恢复一切或无需人工决策。

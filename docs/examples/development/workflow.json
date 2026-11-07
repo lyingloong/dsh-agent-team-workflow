@@ -1,7 +1,7 @@
 {
   "apiVersion": 2,
   "name": "Development worker pools",
-  "description": "Workflow-owned requirements and retained worktrees. Start one producer packet explicitly at mine-gate; user arrivals enqueue dispatch. Nodes are persistent pools; only individual packets finish.",
+  "description": "Workflow-owned requirements and one detached worktree per item until verified merge. Start one producer packet explicitly at mine-gate; user arrivals enqueue dispatch. Nodes are persistent pools; only individual packets finish.",
   "entry": "dispatch",
   "concurrency": 6,
   "historyLimit": 100,
@@ -18,6 +18,11 @@
     {
       "id": "mine-gate", "type": "gate", "title": "Mining switch", "concurrency": 1,
       "inputs": { "dataRoot": "$input.dataRoot" }, "config": { "delayMs": 60000 }
+    },
+    {
+      "id": "queue-check", "type": "command", "title": "Check implementation backlog", "concurrency": 1,
+      "inputs": { "dataRoot": "$input.dataRoot", "maxPending": 3 },
+      "config": { "command": "node docs/examples/development/driver.mjs queue-check", "json": true }
     },
     {
       "id": "seed-batch", "type": "command", "title": "Claim seed batch", "concurrency": 1,
@@ -41,7 +46,7 @@
       "id": "miner", "type": "agent", "title": "Mine one seed", "role": "analyst", "concurrency": 1,
       "config": {
         "cwd": "$input.cwd", "outcomes": ["proposal", "idle"],
-        "prompt": "Read the workflow-owned seed JSON at input.dataRef and relevant source in cwd. Propose one concrete requirement from that evidence, or explicitly decline. Do not edit the repository or business store and do not invoke any approval service. Risk is your model assessment: low (local reversible), mid (cross-module/uncertain), high (security/destructive/external). Return outcome proposal with output {proposal:{title,description,risk,priority:1..9,tags:[]}}, or outcome idle with output {proposal:null}. Do not invent another seed or requirement id. The record command derives the same stable requirement id from this seed. No default task deadline is set."
+        "prompt": "Mine one seed for genuinely useful, varied work. Read the seed JSON at input.dataRef, the requirement queue under input.dataRoot/requirements, recent commits, tests, docs and relevant source in cwd. First generate 3-5 candidate directions, covering correctness/regression, reliability/error handling, performance, UX/accessibility, test gaps/observability, security/data safety and maintainability/tooling. For each candidate state evidence, impact, risk and the smallest verifiable acceptance. Discard duplicates of existing requirements, weak or evidence-free ideas, pure style preferences and anything not independently shippable. Then choose the single highest-value concrete change. Seeds with origin=baseline are discovery directions, not proof: return idle if the repository does not support a concrete proposal. Do not invent another seed or requirement id. Do not edit the repository or business store and do not invoke approval services. Risk is your assessment: low (local reversible), mid (cross-module/uncertain), high (security/destructive/external). Return outcome proposal with output {proposal:{title,description,risk,priority:1..9,tags:[]}}, or outcome idle with output {proposal:null}. The record command derives the same stable requirement id from this seed. No default task deadline is set."
       }
     },
     {
@@ -139,24 +144,11 @@
       "config": { "command": "node docs/examples/development/driver.mjs integrate", "json": true }
     },
     {
-      "id": "conflict-human", "type": "human", "title": "Conflict recovery",
-      "config": { "title": "Resolve/commit or explicitly abort the local target merge manually; retain requirement worktree", "outcomes": ["resolved", "aborted"] }
-    },
-    {
-      "id": "recover-resolved", "type": "command", "title": "Verify manual resolution",
-      "inputs": { "dataRef": "$input.dataRef", "claimId": "$input.claimId", "decision": "resolved", "note": "$prev.note" },
-      "config": { "command": "node docs/examples/development/driver.mjs recover-integration", "json": true }
-    },
-    {
-      "id": "recover-aborted", "type": "command", "title": "Verify abort; rework",
-      "inputs": { "dataRef": "$input.dataRef", "claimId": "$input.claimId", "decision": "aborted", "note": "$prev.note" },
-      "config": { "command": "node docs/examples/development/driver.mjs recover-integration", "json": true }
-    },
-    {
       "id": "cleanup", "type": "command", "title": "Explicit cleanup policy", "concurrency": 1,
       "config": { "command": "node docs/examples/development/driver.mjs cleanup", "json": true }
     },
     { "id": "busy-dispatch", "type": "gate", "config": { "delayMs": 1000 } },
+    { "id": "busy-queue-check", "type": "gate", "config": { "delayMs": 1000 } },
     { "id": "busy-seed-batch", "type": "gate", "config": { "delayMs": 1000 } },
     { "id": "busy-producer-dispatch", "type": "gate", "config": { "delayMs": 1000 } },
     { "id": "busy-record-proposal", "type": "gate", "config": { "delayMs": 1000 } },
@@ -173,13 +165,13 @@
     { "id": "busy-request-changes", "type": "gate", "config": { "delayMs": 1000 } },
     { "id": "busy-reject-merge", "type": "gate", "config": { "delayMs": 1000 } },
     { "id": "busy-integrate", "type": "gate", "config": { "delayMs": 1000 } },
-    { "id": "busy-recover-resolved", "type": "gate", "config": { "delayMs": 1000 } },
-    { "id": "busy-recover-aborted", "type": "gate", "config": { "delayMs": 1000 } },
     { "id": "busy-cleanup", "type": "gate", "config": { "delayMs": 1000 } }
   ],
   "edges": [
     { "from": "dispatch", "to": "work-fanout", "on": "ready" },
-    { "from": "mine-gate", "to": "seed-batch", "on": "complete" },
+    { "from": "mine-gate", "to": "queue-check", "on": "complete" },
+    { "from": "queue-check", "to": "seed-batch", "on": "mine" },
+    { "from": "queue-check", "to": "producer-dispatch", "on": "skip" },
     { "from": "seed-batch", "to": "seed-fanout", "on": "ready" },
     { "from": "seed-batch", "to": "producer-dispatch", "on": "idle" },
     { "from": "seed-fanout", "to": "producer-dispatch", "on": "complete" },
@@ -211,13 +203,11 @@
     { "from": "approve-merge", "to": "integrate", "on": "approve" },
     { "from": "request-changes", "to": "begin-engineering", "on": "revise" },
     { "from": "integrate", "to": "cleanup", "on": "merged" },
-    { "from": "integrate", "to": "conflict-human", "on": "conflict" },
-    { "from": "conflict-human", "to": "recover-resolved", "on": "resolved" },
-    { "from": "conflict-human", "to": "recover-aborted", "on": "aborted" },
-    { "from": "recover-resolved", "to": "cleanup", "on": "merged" },
-    { "from": "recover-aborted", "to": "begin-engineering", "on": "revise" },
+    { "from": "integrate", "to": "begin-engineering", "on": "revise" },
     { "from": "dispatch", "to": "busy-dispatch", "on": "busy" },
     { "from": "busy-dispatch", "to": "dispatch", "on": "complete" },
+    { "from": "queue-check", "to": "busy-queue-check", "on": "busy" },
+    { "from": "busy-queue-check", "to": "queue-check", "on": "complete" },
     { "from": "seed-batch", "to": "busy-seed-batch", "on": "busy" },
     { "from": "busy-seed-batch", "to": "seed-batch", "on": "complete" },
     { "from": "producer-dispatch", "to": "busy-producer-dispatch", "on": "busy" },
@@ -250,10 +240,6 @@
     { "from": "busy-reject-merge", "to": "reject-merge", "on": "complete" },
     { "from": "integrate", "to": "busy-integrate", "on": "busy" },
     { "from": "busy-integrate", "to": "integrate", "on": "complete" },
-    { "from": "recover-resolved", "to": "busy-recover-resolved", "on": "busy" },
-    { "from": "busy-recover-resolved", "to": "recover-resolved", "on": "complete" },
-    { "from": "recover-aborted", "to": "busy-recover-aborted", "on": "busy" },
-    { "from": "busy-recover-aborted", "to": "recover-aborted", "on": "complete" },
     { "from": "cleanup", "to": "busy-cleanup", "on": "busy" },
     { "from": "busy-cleanup", "to": "cleanup", "on": "complete" }
   ]
