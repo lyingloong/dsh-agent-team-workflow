@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { normalizeDefinition } from '../src/v2/definition.mjs';
-import { newRunState, enqueue, run, decide, waitingHumanTokens } from '../src/v2/runtime.mjs';
-import { SessionStore } from '../src/v2/store.mjs';
-import { requireCommand, requireHttp } from '../src/v2/permissions.mjs';
+import { normalizeDefinition } from '../src/definition.mjs';
+import { newRunState, enqueue, run, decide, waitingHumanTokens } from '../src/runtime.mjs';
+import { SessionStore } from '../src/store.mjs';
+import { requireCommand, requireHttp } from '../src/permissions.mjs';
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 function graph(nodes, edges = [], extra = {}) { return normalizeDefinition({ apiVersion: 2, name: 'core audit', nodes, edges, ...extra }); }
 async function fixture(t, definition, input = {}) {

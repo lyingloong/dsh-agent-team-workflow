@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, rm, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { normalizeDefinition } from '../src/v2/definition.mjs';
-import { newRunState, enqueue, run, decide, waitingHumanTokens, waitingTokens } from '../src/v2/runtime.mjs';
-import { SessionStore } from '../src/v2/store.mjs';
-import { publicRun } from '../src/v2/view.mjs';
+import { normalizeDefinition } from '../src/definition.mjs';
+import { newRunState, enqueue, run, decide, waitingHumanTokens, waitingTokens } from '../src/runtime.mjs';
+import { SessionStore } from '../src/store.mjs';
+import { publicRun } from '../src/view.mjs';
 
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));

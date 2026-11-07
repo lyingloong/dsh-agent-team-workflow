@@ -12,9 +12,9 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { DevelopmentStore } from '../docs/examples/development/store.mjs';
 import { git, prepare, snapshot, recordReview, integrate, cleanup } from '../docs/examples/development/worktrees.mjs';
 import { stage } from '../docs/examples/development/driver.mjs';
-import { normalizeDefinition } from '../src/v2/definition.mjs';
-import { newRunState, enqueue, run, decide, waitingHumanTokens } from '../src/v2/runtime.mjs';
-import { createExecutors } from '../src/v2/executors.mjs';
+import { normalizeDefinition } from '../src/definition.mjs';
+import { newRunState, enqueue, run, decide, waitingHumanTokens } from '../src/runtime.mjs';
+import { createExecutors } from '../src/executors.mjs';
 
 const example = fileURLToPath(new URL('../docs/examples/development/', import.meta.url));
 async function fixture(t, { materialize = false } = {}) {

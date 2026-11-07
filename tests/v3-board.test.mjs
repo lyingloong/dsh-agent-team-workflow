@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-const html = readFileSync(new URL('../src/v2/board.html', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../src/board.html', import.meta.url), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const client = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8');
 const SECRET = 'private-board-secret';

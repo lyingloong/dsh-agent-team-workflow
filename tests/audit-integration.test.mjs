@@ -4,11 +4,11 @@ import path from 'node:path';
 import os from 'node:os';
 import { mkdtemp, rm, writeFile, readFile, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { WorkflowRunner, preflightRun } from '../src/v2/runner.mjs';
-import { SessionStore } from '../src/v2/store.mjs';
-import { normalizeDefinition } from '../src/v2/definition.mjs';
-import { createExecutors, parseCommandResult, parseAgentText } from '../src/v2/executors.mjs';
-import { installWebApi, ROUTE_PREFIX } from '../src/v2/web-api.mjs';
+import { WorkflowRunner, preflightRun } from '../src/runner.mjs';
+import { SessionStore } from '../src/store.mjs';
+import { normalizeDefinition } from '../src/definition.mjs';
+import { createExecutors, parseCommandResult, parseAgentText } from '../src/executors.mjs';
+import { installWebApi, ROUTE_PREFIX } from '../src/web-api.mjs';
 import { fakeJobs, deferred } from './helpers/jobs.mjs';
 test('plain text and missing outcomes cannot silently pass even single-outcome agents',()=>{
   for (const value of ['I could not complete the task', '{}', 'null', '[]']) assert.throws(()=>parseAgentText(value,{outcomes:['complete']}),e=>e.code==='invalid_agent_output');

@@ -9,8 +9,8 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath, lstat } fro
 import { DevelopmentStore, atomicJSON } from '../docs/examples/development/store.mjs';
 import { git, prepare, snapshot, recordReview, integrate, recoverIntegration, cleanup } from '../docs/examples/development/worktrees.mjs';
 import { stage } from '../docs/examples/development/driver.mjs';
-import { normalizeDefinition } from '../src/v2/definition.mjs';
-import { newRunState, enqueue, run, decide, waitingHumanTokens } from '../src/v2/runtime.mjs';
+import { normalizeDefinition } from '../src/definition.mjs';
+import { newRunState, enqueue, run, decide, waitingHumanTokens } from '../src/runtime.mjs';
 
 const execute = promisify(execFile);
 const driver = fileURLToPath(new URL('../docs/examples/development/driver.mjs', import.meta.url));

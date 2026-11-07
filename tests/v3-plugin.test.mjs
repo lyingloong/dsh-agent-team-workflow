@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { apply } from '../src/v2/plugin.mjs';
+import { apply } from '../src/plugin.mjs';
 import { fakeJobs } from './helpers/jobs.mjs';
 
 const AGENT = {

@@ -1,6 +1,6 @@
 {
   "name": "dsh-auto-workflow",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "private": false,
   "description": "dsh-auto-workflow: persistent, concurrent node-graph workflows for DeepSeek Harness: agent, command, HTTP, human, fan-out/join, gate and subworkflow nodes with ordered model fallback, permissions, artifacts and a live board.",
   "type": "module",
@@ -10,13 +10,13 @@
     "dsh": ">=0.2.1-rc.5"
   },
   "exports": {
-    ".": "./src/v2/plugin.mjs",
+    ".": "./src/plugin.mjs",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json",
     "./client": "./lib/client.js"
   },
   "files": [
-    "src/v2",
+    "src",
     "lib",
     "docs",
     "scripts/verify-release.mjs",
@@ -31,7 +31,7 @@
     "test:watch": "node --test --watch tests/run.mjs",
     "verify:release": "node scripts/verify-release.mjs"
   },
-  "main": "./src/v2/plugin.mjs",
+  "main": "./src/plugin.mjs",
   "keywords": [
     "dsh",
     "dsh-plugin",

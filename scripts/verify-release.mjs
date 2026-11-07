@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { normalizeDefinition } from '../src/v2/definition.mjs';
+import { normalizeDefinition } from '../src/definition.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
@@ -29,7 +29,7 @@ async function collect(relative) {
   }
 }
 for (const entry of pkg.files) await collect(entry);
-for (const name of ['CHANGELOG.md', 'LICENSE', 'lib/client.js', 'src/v2/board.html', 'src/v2/permissions.mjs', 'src/v2/command.mjs', 'docs/verification.md', `docs/releases/v${pkg.version}.md`, 'docs/examples/development/workflow.json', 'docs/examples/development/driver.mjs', 'docs/examples/development/store.mjs', 'docs/examples/development/worktrees.mjs']) {
+for (const name of ['CHANGELOG.md', 'LICENSE', 'lib/client.js', 'src/board.html', 'src/permissions.mjs', 'src/command.mjs', 'docs/verification.md', `docs/releases/v${pkg.version}.md`, 'docs/examples/development/workflow.json', 'docs/examples/development/driver.mjs', 'docs/examples/development/store.mjs', 'docs/examples/development/worktrees.mjs']) {
   assert.ok(files.has(name), `required release file missing: ${name}`);
 }
 for (const target of Object.values(pkg.exports)) {

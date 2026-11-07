@@ -4,8 +4,8 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { apply } from '../src/v2/plugin.mjs';
-import { ROUTE_PREFIX } from '../src/v2/web-api.mjs';
+import { apply } from '../src/plugin.mjs';
+import { ROUTE_PREFIX } from '../src/web-api.mjs';
 import { fakeJobs } from './helpers/jobs.mjs';
 
 const GRAPH = {
