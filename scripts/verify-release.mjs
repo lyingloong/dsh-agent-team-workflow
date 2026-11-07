@@ -12,7 +12,7 @@ assert.equal(pkg.name, 'dsh-auto-workflow');
 assert.match(pkg.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
 assert.equal(pkg.private, false);
 assert.equal(pkg.license, 'MIT');
-assert.equal(pkg.repository.url, 'git+https://github.com/lyingloong/dsh-agent-team-workflow.git');
+assert.equal(pkg.repository.url, 'git+https://github.com/lyingloong/dsh-auto-workflow.git');
 if (process.env.GITHUB_REF_TYPE === 'tag') assert.equal(process.env.GITHUB_REF_NAME, `v${pkg.version}`, 'release tag must match the manifest');
 
 const files = new Set(['package.json']);

@@ -1,8 +1,15 @@
 # 更新记录
 
+## v1.0.1 — 仓库更名与正式命名
+
+- GitHub 仓库由 `lyingloong/dsh-agent-team-workflow` 更名为 `lyingloong/dsh-auto-workflow`，旧地址由 GitHub 重定向。
+- 文档、看板和 Release 正式名称统一为 `dsh-auto-workflow`；`Auto Workflow` 仅作短名，顶栏入口仍为“工作流”。
+- 包元数据、文档链接和看板标题同步更新；无运行时、图定义、运行状态或示例业务数据格式变化。
+- `v1.0.0` 的 tag、Release 和安装包保持原样。
+
 ## v1.0.0 — 首个公开发布
 
-Auto Workflow 以包名 `dsh-auto-workflow` 发布；GitHub Release 与 tag 均为 `v1.0.0`。仓库地址继续使用 [lyingloong/dsh-agent-team-workflow](https://github.com/lyingloong/dsh-agent-team-workflow)。
+`dsh-auto-workflow`（短名 Auto Workflow）以该包名发布；GitHub Release 与 tag 均为 `v1.0.0`。发布时仓库名为 `lyingloong/dsh-agent-team-workflow`；随后由 v1.0.1 更名为 [lyingloong/dsh-auto-workflow](https://github.com/lyingloong/dsh-auto-workflow)，旧链接由平台重定向。
 
 ### 首发内容
 

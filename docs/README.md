@@ -1,6 +1,6 @@
 # 文档导航
 
-Auto Workflow（`dsh-auto-workflow`）的首个公开 release/tag 为 **v1.0.0**。先安装插件，再选择目标项目和权限；阅读文档或打开看板不会自行启动业务。
+`dsh-auto-workflow`（短名 Auto Workflow）的首个功能发布为 **v1.0.0**，当前命名补丁为 **v1.0.1**。先安装插件，再选择目标项目和权限；阅读文档或打开看板不会自行启动业务。
 
 ## 第一次使用
 
@@ -15,7 +15,8 @@ Auto Workflow（`dsh-auto-workflow`）的首个公开 release/tag 为 **v1.0.0**
 | [插件参考](<plugin-summary.md>) | 定义、节点、输入映射、模型回退、JSON command 协议、权限和状态存储。 |
 | [业务流程与保证](<workflow-summary.md>) | 用户优先、稳定 ID、detached worktree、3+3 池、revision/epoch、审批与保留策略。 |
 | [运行生命周期与排障](<run-lifecycle.md>) | idle、Human 等待、入队、暂停/Stop、Host 中断及显式恢复。 |
-| [v1.0.0 发布说明](<releases/v1.0.0.md>) | 首发范围、固定版本安装和发布边界。 |
+| [v1.0.1 发布说明](<releases/v1.0.1.md>) | 仓库更名、正式命名和固定版本安装。 |
+| [v1.0.0 发布说明](<releases/v1.0.0.md>) | 首个功能发布范围和历史安装基准。 |
 | [更新记录](<../CHANGELOG.md>) | 公开版本重编号与废弃开发序列说明。 |
 
 ## 两层责任不要混淆

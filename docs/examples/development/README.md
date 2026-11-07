@@ -1,6 +1,6 @@
 # GitHub 项目本地持续开发
 
-这是 Auto Workflow（`dsh-auto-workflow`）的**唯一主示例**：克隆 GitHub 项目，在本地持续处理真实需求，经模型审查与 Human merge 门禁后集成。示例是应用代码，插件只提供通用调度；没有远端 Issue/PR 服务、聊天监听器或外部审批端点。
+这是 `dsh-auto-workflow`（短名 Auto Workflow）的**唯一主示例**：克隆 GitHub 项目，在本地持续处理真实需求，经模型审查与 Human merge 门禁后集成。示例是应用代码，插件只提供通用调度；没有远端 Issue/PR 服务、聊天监听器或外部审批端点。
 
 **阅读文档不会启动任何操作。** 下面是供操作者检查、替换路径并明确授权后执行的说明，不是对当前仓库或远端的自动操作。首次使用先看 [项目首页](<../../../README.md>)；业务不变量集中在 [流程与保证](<../../workflow-summary.md>)。
 
@@ -34,7 +34,7 @@ git switch -c integration/workflow-batch
 
 `integration/workflow-batch` 是**一个共享的本地集成批次分支**。后续 store 的 `baseBranch` 指向它，不是每需求建立一个分支；也不假设可以直接 push 受保护的 `main`。已有仓库可在检查干净状态后选用已有的本地集成分支，无需重新 clone。
 
-从固定 v1.0.0 的源码 checkout 或解压后的发行包取得上表四个文件。安装插件不等于把它们放进业务项目；需要明确复制到图使用的相同路径。若目标已有同名文件，先比较，**不要直接覆盖**。
+从固定 v1.0.1 的源码 checkout 或解压后的发行包取得上表四个文件。安装插件不等于把它们放进业务项目；需要明确复制到图使用的相同路径。若目标已有同名文件，先比较，**不要直接覆盖**。
 
 ```powershell
 $ExampleSource = 'C:/work/auto-workflow-release/docs/examples/development'
@@ -259,6 +259,6 @@ item envelope 至少携带业务 `dataRef` / `claimId`，按阶段携带冻结�
 npm test
 ```
 
-[示例测试](https://github.com/lyingloong/dsh-agent-team-workflow/blob/v1.0.0/tests/development-example.test.mjs) 与 [安全回归](https://github.com/lyingloong/dsh-agent-team-workflow/blob/v1.0.0/tests/audit-example.test.mjs) 使用可丢弃的真实本地 Git 仓库/worktree，覆盖准入、revision/epoch、3+3 并发、反复 review、Human 反馈、busy、snapshot reconciliation、冲突和保留；自动回归不调用付费模型或远端服务。实际运行仍需要有效模型工具、真实输入及项目专属验证。
+[示例测试](https://github.com/lyingloong/dsh-auto-workflow/blob/v1.0.1/tests/development-example.test.mjs) 与 [安全回归](https://github.com/lyingloong/dsh-auto-workflow/blob/v1.0.1/tests/audit-example.test.mjs) 使用可丢弃的真实本地 Git 仓库/worktree，覆盖准入、revision/epoch、3+3 并发、反复 review、Human 反馈、busy、snapshot reconciliation、冲突和保留；自动回归不调用付费模型或远端服务。实际运行仍需要有效模型工具、真实输入及项目专属验证。
 
 这不是多 Host 数据库、身份认证服务或恶意文件系统沙箱。操作者负责可信调用者、数据备份、保留期限、项目适配以及经明确授权的远端发布；不要把“持续运行”解释为自动恢复一切或无需人工决策。

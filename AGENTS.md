@@ -1,8 +1,8 @@
-# Auto Workflow repository development rules
+# dsh-auto-workflow repository development rules
 
 ## One current architecture, explicit version boundaries
 
-Auto Workflow 1.0.0 is the first curated public release of the current plugin.
+`dsh-auto-workflow` 1.0.1 (short display name: Auto Workflow) is the current curated public release; 1.0.0 remains the first functional release.
 Earlier experimental release/tag names were withdrawn by the maintainer; their
 commits remain in Git history. Package SemVer, graph apiVersion, run-state version
 and the example's business-store version are separate contracts.

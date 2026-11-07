@@ -16,10 +16,10 @@ npm pack --dry-run --json --ignore-scripts
 - Windows / Node.js 24.12.0 的最后一轮功能回归为 **123 项通过、0 失败、0 跳过**，包含核心、执行器、宿主集成、Web API、看板、完整示例及独立审计回归。
 - `test:runner` 与默认入口使用同一组测试；`test:watch` 使用明确文件入口，不把测试目录当作模块运行。
 - `verify:release` 检查包名、版本、exports、必要文件、包内 Markdown 链接、私有信息泄露以及唯一示例的 3+3/root6 配置。它只读文件，不执行模型或业务命令。
-- CI 保留仓库原有 Ubuntu / Windows × Node.js 24.x 矩阵。**矩阵配置不是通过声明**：具体提交的完成状态以 [GitHub Actions](https://github.com/lyingloong/dsh-agent-team-workflow/actions/workflows/test.yml) 为准。Node.js 22.5 是声明的最低版本，本次未单独实跑该下限；也未对 macOS 作完整运行验收。
+- CI 保留仓库原有 Ubuntu / Windows × Node.js 24.x 矩阵。**矩阵配置不是通过声明**：具体提交的完成状态以 [GitHub Actions](https://github.com/lyingloong/dsh-auto-workflow/actions/workflows/test.yml) 为准。Node.js 22.5 是声明的最低版本，本次未单独实跑该下限；也未对 macOS 作完整运行验收。
 - 所有测试使用一次性临时目录；Git 测试有独立本地身份，不修改用户仓库，不发布或推送。
 
-测试源码：[默认入口](https://github.com/lyingloong/dsh-agent-team-workflow/blob/v1.0.0/tests/run.mjs)、[核心审计](https://github.com/lyingloong/dsh-agent-team-workflow/blob/v1.0.0/tests/audit-core.test.mjs)、[集成审计](https://github.com/lyingloong/dsh-agent-team-workflow/blob/v1.0.0/tests/audit-integration.test.mjs)、[示例审计](https://github.com/lyingloong/dsh-agent-team-workflow/blob/v1.0.0/tests/audit-example.test.mjs)。测试不随运行安装包分发；源码和固定版本链接保留完整用例。
+测试源码：[默认入口](https://github.com/lyingloong/dsh-auto-workflow/blob/v1.0.1/tests/run.mjs)、[核心审计](https://github.com/lyingloong/dsh-auto-workflow/blob/v1.0.1/tests/audit-core.test.mjs)、[集成审计](https://github.com/lyingloong/dsh-auto-workflow/blob/v1.0.1/tests/audit-integration.test.mjs)、[示例审计](https://github.com/lyingloong/dsh-auto-workflow/blob/v1.0.1/tests/audit-example.test.mjs)。测试不随运行安装包分发；源码和固定版本链接保留完整用例。
 
 ## 真实 Harness / 模型 / Git 验收
 

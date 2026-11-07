@@ -1,10 +1,10 @@
-# Auto Workflow
+# dsh-auto-workflow
 
-**Auto Workflow**（包名 `dsh-auto-workflow`）是 DeepSeek Harness 的持久化、并发节点图工作流插件。它让模型、命令和人工决策在同一张图中协作：新任务以独立 packet 进入，某项等待 Human 审批时，其他任务仍可继续。
+**dsh-auto-workflow**（短名 Auto Workflow）是 DeepSeek Harness 的持久化、并发节点图工作流插件。它让模型、命令和人工决策在同一张图中协作：新任务以独立 packet 进入，某项等待 Human 审批时，其他任务仍可继续。
 
 **“Auto”指已授权流程的持续调度，不是免审批。** Host 常驻期间，空闲或 Human 等待不会结束运行；状态与数据引用会落盘。Host 停止、插件重载或执行中断后，不自动重放不确定的工作，也不承诺跨 Git/HTTP 的掉电事务。
 
-首个公开发布为 **v1.0.0**。仓库地址保留为 [lyingloong/dsh-agent-team-workflow](https://github.com/lyingloong/dsh-agent-team-workflow)。
+首个公开发布为 **v1.0.0**；当前发布为 **v1.0.1**，仅统一仓库名和正式名称，无运行时行为变化。仓库地址为 [lyingloong/dsh-auto-workflow](https://github.com/lyingloong/dsh-auto-workflow)。
 
 ## 安装
 
@@ -13,14 +13,14 @@
 推荐固定 release，避免随开发分支变化：
 
 ```bash
-dsh plugin --profile desktop add github:lyingloong/dsh-agent-team-workflow#v1.0.0
+dsh plugin --profile desktop add github:lyingloong/dsh-auto-workflow#v1.0.1
 ```
 
-也可从 [v1.0.0 Release](https://github.com/lyingloong/dsh-agent-team-workflow/releases/tag/v1.0.0) 下载 `.tgz`，或安装本地 checkout：
+也可从 [v1.0.1 Release](https://github.com/lyingloong/dsh-auto-workflow/releases/tag/v1.0.1) 下载 `.tgz`，或安装本地 checkout：
 
 ```bash
-dsh plugin --profile desktop add /absolute/path/dsh-auto-workflow-1.0.0.tgz
-dsh plugin --profile desktop add /absolute/path/dsh-agent-team-workflow
+dsh plugin --profile desktop add /absolute/path/dsh-auto-workflow-1.0.1.tgz
+dsh plugin --profile desktop add /absolute/path/dsh-auto-workflow
 ```
 
 安装后重启 DSH Host，再刷新 Web GUI。安装插件**不会**把示例脚本复制到业务仓库，也不会自动启动工作流。
@@ -82,7 +82,7 @@ flowchart TD
 - command/HTTP 权限默认 deny。命令 allowlist 不是文件系统沙箱，也不替代 agent 工具权限。
 - 暂停和禁用节点不会取消在途工作；Stop 不等于回滚。失败或中断后先检查副作用，再显式恢复或新建 run。
 - 单 Host、本地文件锁；不是分布式队列、外部审批服务或 exactly-once Git/HTTP 事务。不自动 push、开 PR、合并远端或部署，也不默认直接推送受保护的 `main`。
-- 包版本 `1.0.0`、定义 `apiVersion: 2`、运行状态 `version: 3`、示例业务存储 `version: 2` 是不同层的版本号，不要求相同。废弃开发序列与迁移边界见 [更新记录](<CHANGELOG.md>)。
+- 包版本 `1.0.1`、定义 `apiVersion: 2`、运行状态 `version: 3`、示例业务存储 `version: 2` 是不同层的版本号，不要求相同。废弃开发序列与迁移边界见 [更新记录](<CHANGELOG.md>)。
 
 已验证范围、真实模型执行概况与限制集中在 [验证说明](<docs/verification.md>)。从源码 checkout 运行完整回归：
 
@@ -90,4 +90,4 @@ flowchart TD
 npm test
 ```
 
-继续阅读：[文档导航](<docs/README.md>) · [运行生命周期与排障](<docs/run-lifecycle.md>) · [v1.0.0 发布说明](<docs/releases/v1.0.0.md>)。
+继续阅读：[文档导航](<docs/README.md>) · [运行生命周期与排障](<docs/run-lifecycle.md>) · [v1.0.1 发布说明](<docs/releases/v1.0.1.md>)。
