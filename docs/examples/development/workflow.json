@@ -144,6 +144,10 @@
       "config": { "command": "node docs/examples/development/driver.mjs integrate", "json": true }
     },
     {
+      "id": "external-gate", "type": "gate", "title": "Wait for external PR merge", "concurrency": 1,
+      "config": { "delayMs": 30000 }
+    },
+    {
       "id": "cleanup", "type": "command", "title": "Explicit cleanup policy", "concurrency": 1,
       "config": { "command": "node docs/examples/development/driver.mjs cleanup", "json": true }
     },
@@ -204,6 +208,8 @@
     { "from": "request-changes", "to": "begin-engineering", "on": "revise" },
     { "from": "integrate", "to": "cleanup", "on": "merged" },
     { "from": "integrate", "to": "begin-engineering", "on": "revise" },
+    { "from": "integrate", "to": "external-gate", "on": "external-pending" },
+    { "from": "external-gate", "to": "integrate", "on": "complete" },
     { "from": "dispatch", "to": "busy-dispatch", "on": "busy" },
     { "from": "busy-dispatch", "to": "dispatch", "on": "complete" },
     { "from": "queue-check", "to": "busy-queue-check", "on": "busy" },

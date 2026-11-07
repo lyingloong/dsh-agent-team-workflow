@@ -7,6 +7,8 @@
 - 新增 `queue-check`：待实现需求（含 engineering）不超过工程师并发数时才自动挖掘，否则只 dispatch 已有队列。
 - 真实 merge 冲突改为自动 `git merge --abort` 并回同一需求工程返修，不再进入人工冲突节点。
 - 默认 `after-verified-merge`：验证合并后强制删除 worktree 及其 ignored/untracked 临时文件；批准 commit、artifact/review 和清理记录保留。
+- 新增 `integrationMode:"external-pr"`：外部 PR 在 GitHub merge 后，工作流只验证本地已更新的 base 分支包含批准 commit，不自行 merge；未出现时每 30 秒重试。
+- 看板增加 Human 待处理详情、简化节点图模式，以及按空闲/运行/等待/错误/关闭着色的节点方块网格。
 
 ## v1.0.0 — 首个公开发布
 

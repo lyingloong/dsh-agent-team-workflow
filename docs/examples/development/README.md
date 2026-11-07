@@ -55,7 +55,7 @@ command 节点执行的是固定命令，例如 `node docs/examples/development/
 继续在目标项目根目录运行；以下 `dataRoot` 与项目并列，位于项目外：
 
 ```powershell
-$env:DSH_WORKFLOW_INPUT = '{"dataRoot":"C:/work/project-workflow-data","repoRoot":"C:/work/project","baseBranch":"integration/workflow-batch","cleanupPolicy":"after-verified-merge"}'
+$env:DSH_WORKFLOW_INPUT = '{"dataRoot":"C:/work/project-workflow-data","repoRoot":"C:/work/project","baseBranch":"integration/workflow-batch","cleanupPolicy":"after-verified-merge","integrationMode":"local"}'
 node docs/examples/development/driver.mjs init
 ```
 
@@ -175,6 +175,21 @@ Human 引擎决定由后续 command 转成业务记录；旧需求 revision 的�
 
 正常路径只执行本地 `git merge --no-ff --no-edit <approved commit>`。成功后复验干净 checkout 和已批准 commit 的祖先关系，记录 `merged` / `integration.state:verified`。Git hooks 仍是可信项目代码；不要同时外部修改目标。
 
+### 外部 PR 模式
+
+初始化时选择：
+
+```json
+{ "integrationMode": "external-pr" }
+```
+
+这个模式不自行 merge。Human merge 批准后，`integrate` 只检查**本地已更新的 `baseBranch` checkout** 是否已包含批准 commit：
+
+- 尚未包含：返回 `external-pending`，`external-gate` 每 30 秒重试；
+- 已包含：记录 `integration.state:external-verified`，进入默认 cleanup。
+
+外部操作者/CI 负责 push、开 PR、在 GitHub 上 merge，并在 merge 后把本地 `baseBranch` fetch/更新到包含该提交的状态。示例图不调用 GitHub API、不 push、不开 PR，也不会轮询远端；本地 checkout 没更新时会一直等待。审批、review 和精确 commit 绑定与本地模式相同。
+
 若发生真实 merge 冲突，`integrate` 会保存冲突文件/错误/pre-merge HEAD，执行 `git merge --abort`，复核目标恢复干净，清除旧 merge approval，并把同一需求/同一 worktree 送回 `begin-engineering`。这是业务 `revise` 边，不是模型失败，也不是自动重试 merge；下一次仍须新 snapshot、review 和 Human 批准。
 
 其他项若因共享目标不干净或 ignored 碰撞而失败，不自动重放。先查其运行与业务状态，再明确选择续接阶段。
@@ -240,7 +255,7 @@ item envelope 至少携带业务 `dataRef` / `claimId`，按阶段携带冻结�
 
 | Stage | 额外输入 / 主要行为 |
 | --- | --- |
-| `init` | `dataRoot`、`repoRoot`，可选 `baseBranch`、`cleanupPolicy`（默认 `after-verified-merge`）；初始化固定配置并写入 baseline discovery seeds。 |
+| `init` | `dataRoot`、`repoRoot`，可选 `baseBranch`、`cleanupPolicy`（默认 `after-verified-merge`）、`integrationMode`（`local` 或 `external-pr`）；初始化固定配置并写入 baseline discovery seeds。 |
 | `requirement` / `seed` | `dataRoot` 与 `requirement` / `seed` 对象；显式 intake。seed 可带 `origin`、`category`、`relatedRequirementId`；可选，不强制。 |
 | `claim` / `seed-batch` | `dataRoot`、可选 `batchSize` 1..100（图为 3）；返回 ready items 或 idle。 |
 | `queue-check` | `dataRoot`、`maxPending`；返回 `mine` 或 `skip`，统计待实现（含 engineering）需求。 |
@@ -254,7 +269,7 @@ item envelope 至少携带业务 `dataRef` / `claimId`，按阶段携带冻结�
 | `review-input` | 当前 `artifactRef` / `commit`；生成冻结 review 输入，也是对账后的续接入口。 |
 | `record-review` | 精确 artifact/commit、`decision:pass\|revise`，非空字符串 summary/verification/reviewer。 |
 | `merge-decision` | 当前 artifact、decision，返修/拒绝需反馈；精确产物批准。 |
-| `integrate` | 已 Human 批准的 item；merged，或冲突自动 abort 后 `revise`。 |
+| `integrate` | 已 Human 批准的 item；本地模式 merged / 冲突自动 abort 后 revise；external-pr 模式 merged 或 external-pending。 |
 | `recover-integration` | 仅异常兜底：操作者已手工恢复 Git 后，`decision:resolved\|aborted`、note；不在主图。 |
 | `cleanup` | 默认 `after-verified-merge` 自动强删已合并 worktree；`retain` 是显式例外。 |
 | `status` / `inspect` | `{dataRoot}` / item envelope；有界业务状态与引用。 |

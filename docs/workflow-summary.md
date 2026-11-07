@@ -62,6 +62,8 @@ Human 等待不占工作槽，不阻挡其他 packet、producer 或新到达的�
 
 合并前检查目标中的 ignored 文件与批准 tree 的路径碰撞（含文件/目录前缀与适用时的大小写折叠），碰撞时保留目标数据、不执行 merge。成功后验证干净目标及已批准 commit 的祖先关系。真实 merge 冲突由 `integrate` 自动保存冲突文件/错误、执行 `git merge --abort`、清除旧 merge approval，并把同一需求/同一 worktree 送回 `begin-engineering`；不重试合并、不把冲突当成模型失败。
 
+`integrationMode:"external-pr"` 时不执行本地 merge：`integrate` 只验证本地已更新的 base 分支已包含批准 commit；尚未包含时返回 `external-pending`，经 30 秒 gate 重试，包含后记录 `external-verified` 并清理。外部 PR 的 push、创建和 GitHub merge 由操作者/CI 完成；示例不轮询远端，也不自动更新本地分支。
+
 默认 **`after-verified-merge`**：验证合并后删除 worktree，包括开发期 ignored/untracked 临时文件，使用受控的 `git worktree remove --force`。删除前仍复核批准 commit、祖先关系和 worktree HEAD；拒绝、冲突、未合并状态不清理。业务 JSON、不可变 artifact/review 和 `cleanedWorktreePath` 记录保留。
 
 ## 中断与显式 reconciliation

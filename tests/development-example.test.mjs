@@ -73,6 +73,8 @@ test('development graph is generic: continuous detached producer, root 6, one th
   assert.ok(!graph.nodes.some(node => node.id === 'conflict-human'));
   assert.ok(graph.edges.some(edge => edge.from === 'queue-check' && edge.to === 'seed-batch' && edge.on === 'mine'));
   assert.ok(graph.edges.some(edge => edge.from === 'integrate' && edge.to === 'begin-engineering' && edge.on === 'revise'));
+  assert.ok(graph.nodes.find(node => node.id === 'external-gate').type === 'gate');
+  assert.ok(graph.edges.some(edge => edge.from === 'integrate' && edge.to === 'external-gate' && edge.on === 'external-pending'));
   assert.ok(graph.nodes.find(node => node.id === 'seed-fanout').config.detached);
   assert.ok(graph.nodes.find(node => node.id === 'producer-work').config.detached);
   assert.ok(graph.edges.some(edge => edge.from === 'producer-work' && edge.to === 'mine-gate'));
@@ -360,6 +362,22 @@ test('whole graph reaches both pool caps of three; one human wait never stalls o
       await assert.rejects(lstat(item.cleanedWorktreePath), { code: 'ENOENT' });
     } else assert.ok((await lstat(item.worktreePath)).isDirectory());
   }
+});
+
+test('external-pr mode waits for an external merge and never merges locally', async t => {
+  const { store, repo } = await fixture(t, { integrationMode: 'external-pr' });
+  const item = await prepared(store); const artifact = await implement(store, item); await approve(store, item, artifact);
+  const targetHead = await git(repo, 'rev-parse', 'HEAD');
+  const pending = await integrate(store, item.id, item.claimId);
+  assert.equal(pending.outcome, 'external-pending');
+  assert.equal(await git(repo, 'rev-parse', 'HEAD'), targetHead, 'workflow must not merge locally');
+  assert.equal((await store.get(item.id)).status, 'approved');
+  assert.equal((await store.get(item.id)).integration.state, 'external-pending');
+  await git(repo, 'merge', '--no-ff', artifact.commit, '-m', 'external PR merge');
+  const merged = await integrate(store, item.id, item.claimId);
+  assert.equal(merged.outcome, 'merged');
+  assert.equal(merged.item.integration.state, 'external-verified');
+  assert.equal((await cleanup(store, item.id, item.claimId)).outcome, 'cleaned');
 });
 
 test('explicit cleanup policy may remove only an already verified merged worktree', async t => {

@@ -151,6 +151,17 @@ export async function integrate(store, id, claimId) {
     if (item.status !== 'approved') throw new Error('Implementation not approved for merge');
     const approval = await checkApproval(store, item);
     await targetReady(store);
+    if (store.config.integrationMode === 'external-pr') {
+      const targetHead = commitId(await git(store.config.repoRoot, 'rev-parse', 'HEAD'));
+      if (!await ancestor(store.config.repoRoot, approval.commit, targetHead)) {
+        item.integration = { state: 'external-pending', approvedCommit: approval.commit, artifactRef: approval.artifactRef, targetHead, checkedAt: new Date().toISOString() };
+        await store.save(item);
+        return { item, outcome: 'external-pending' };
+      }
+      item.status = 'merged';
+      item.integration = { state: 'external-verified', approvedCommit: approval.commit, artifactRef: approval.artifactRef, mergeCommit: targetHead, verifiedAt: new Date().toISOString() };
+      return { item, outcome: 'merged' };
+    }
     await protectIgnoredTarget(store.config.repoRoot, approval.commit);
     const preMergeHead = commitId(await git(store.config.repoRoot, 'rev-parse', 'HEAD'));
     item.status = 'integrating';
@@ -200,7 +211,7 @@ export async function recoverIntegration(store, id, claimId, { decision, note })
 export async function cleanup(store, id, claimId, { cleanup: explicitly = false } = {}) {
   return store.locked(() => store.mutate(id, claimId, async item => {
     if (!explicitly && store.config.cleanupPolicy === 'retain') return { item, outcome: 'retained' };
-    if (item.status !== 'merged' || item.integration?.state !== 'verified') throw new Error('Cleanup requires a verified human-approved merge');
+    if (item.status !== 'merged' || !['verified', 'external-verified'].includes(item.integration?.state)) throw new Error('Cleanup requires a verified human-approved merge');
     await verifyMerged(store, item);
     if (!item.worktreePath) return { item, outcome: 'cleaned' };
     const cwd = await checkedWorktree(store, item);

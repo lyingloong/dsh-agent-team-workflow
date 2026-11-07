@@ -33,7 +33,7 @@ dsh plugin --profile desktop add /absolute/path/dsh-auto-workflow
 2. **输入真实需求**：初始化业务存储（会放入 baseline discovery seeds），提交用户需求；可选用 `driver seed` 补充相关证据 seed。用户需求优先级固定为 `0`；示例不监听所有聊天，也不自动抓取 GitHub Issues。
 3. **授权并定义**：检查 [示例图](<docs/examples/development/workflow.json>) 与模型提示词，明确批准命令 allowlist，再调用 `auto_workflow_define`。HTTP 默认拒绝；agent 工具权限另行控制。
 4. **开始运行**：`auto_workflow_start` 绑定项目的绝对 `cwd` 和 `{ "dataRoot": "…" }`；`auto_workflow_run` 挂载运行。在同一 run 中向 `mine-gate` **仅 enqueue 一次** producer，后续需求继续送入现有运行。
-5. **人工决策**：在会话顶部的 **工作流** 看板或 `auto_workflow_decide` 处理具体 Human 项。审批后只在本地集成；验证合并后默认清理 worktree（含开发期临时文件），提交和不可变记录保留。远端 push/PR 必须另行获得明确授权并手动执行。
+5. **人工决策**：在会话顶部的 **工作流** 看板或 `auto_workflow_decide` 处理具体 Human 项。默认本地集成；也可配置 `integrationMode:"external-pr"`，由外部 PR 在 GitHub merge 后只验证本地已更新的 base 分支，不自行 merge。验证合并后默认清理 worktree（含开发期临时文件），提交和不可变记录保留。远端 push/PR 必须另行获得明确授权并手动执行。
 
 ### 主业务图
 
@@ -75,6 +75,12 @@ flowchart TD
 | `auto_workflow_status` | 只读查看队列、并发、Human 待办和私有看板 URL。 |
 
 节点类型包括 `agent`、`command`、`http`、`human`、`fanout`、`join`、`gate`、`subworkflow`。字段与协议见 [插件参考](<docs/plugin-summary.md>)；不要循环轮询 `run`。
+
+## 看板
+
+- **Human 待处理详情**：点“查看详情与输入”打开独立卡片，按需读取该 token 的输入 JSON，并在同一处填写留言、查看 outcome 后决策。
+- **节点图模式**：工具栏“简化”隐藏 `busy-*` 重试门，只保留业务节点；“完整”显示全部边。
+- **节点方块**：每个节点是一个圆角方块，空闲/运行/等待/错误/关闭使用不同颜色；点击方块打开节点详情、数据包和历史。
 
 ## 边界与验证
 

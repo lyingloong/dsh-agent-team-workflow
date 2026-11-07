@@ -83,6 +83,8 @@ button { cursor: pointer; }
 .node-box { fill: var(--panel); stroke: var(--line); stroke-width: 1; filter: drop-shadow(0 1px 2px rgba(16, 24, 40, .06)); }
 .node-box.running { stroke: var(--brand); stroke-width: 2; }
 .node-box.idle { stroke: color-mix(in srgb, var(--ok) 22%, var(--line)); }
+.node-box.waiting { stroke: var(--warn); stroke-width: 2; }
+.node-box.error { stroke: var(--bad); stroke-width: 2; }
 .node-box.disabled { stroke: var(--muted); opacity: .65; }
 .node-box.human { stroke-dasharray: 5 4; }
 .node-box.selected { stroke: var(--brand); stroke-width: 2; }
@@ -103,14 +105,19 @@ button { cursor: pointer; }
 .control-row input { accent-color: var(--brand); }
 .control-hint { margin-left: auto; color: var(--muted); font-size: 10px; }
 .queue-card { min-width: 0; }
-.queue-list { display: flex; flex-direction: column; min-height: 0; max-height: clamp(160px, 28vh, 280px); overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
-.queue-list:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
-.queue-list > * { flex-shrink: 0; }
-.queue-item { padding: 8px 12px; border-top: 1px solid var(--line); font-size: 11px; }
-.queue-item:first-child { border-top: 0; }
-.queue-item-title { color: var(--text); font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.queue-item-meta { color: var(--muted); font-size: 10px; margin-top: 2px; display: flex; gap: 5px; flex-wrap: wrap; }
-.queue-empty { padding: 12px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.queue-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 6px; padding: 8px; }
+.queue-tile { position: relative; min-width: 0; aspect-ratio: 1; display: flex; flex-direction: column; align-items: stretch; justify-content: space-between; gap: 2px; padding: 7px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); color: var(--text); text-align: left; cursor: pointer; overflow: hidden; }
+.queue-tile:hover { filter: brightness(1.03); border-color: var(--line-strong); }
+.queue-tile.idle { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); background: color-mix(in srgb, var(--ok) 7%, var(--panel)); }
+.queue-tile.running { border-color: color-mix(in srgb, var(--brand) 45%, var(--line)); background: color-mix(in srgb, var(--brand) 9%, var(--panel)); }
+.queue-tile.waiting { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); background: color-mix(in srgb, var(--warn) 10%, var(--panel)); }
+.queue-tile.error { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); background: color-mix(in srgb, var(--bad) 10%, var(--panel)); }
+.queue-tile.disabled { opacity: .62; border-style: dashed; }
+.queue-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; color: var(--muted); font-size: 9px; }
+.queue-tile-glyph { color: var(--text); font-size: 11px; font-weight: 700; }
+.queue-tile-name { color: var(--text); font-size: 10px; line-height: 1.2; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.queue-tile-meta { color: var(--muted); font-size: 8.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.queue-empty { padding: 12px; color: var(--muted); font-size: 11px; line-height: 1.6; grid-column: 1 / -1; }
 .human-card { min-width: 0; }
 .human-todo { display: flex; flex-direction: column; }
 .human-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--panel)); font-size: 10px; }
@@ -128,6 +135,13 @@ button { cursor: pointer; }
 .human-history-item strong { color: var(--text); font-weight: 550; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .human-history-item span { margin-left: auto; white-space: nowrap; }
 .human-empty { padding: 14px 12px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.human-detail-card { margin-top: 14px; }
+.human-detail-card.hide { display: none; }
+.human-detail-card .detail-body { grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); }
+.human-detail-input { margin: 0; max-height: 340px; overflow: auto; padding: 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); font: 10.5px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.human-detail-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.human-detail-note { width: 100%; min-height: 64px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--text); padding: 7px 8px; font: 11px/1.5 -apple-system, "Segoe UI", "PingFang SC", sans-serif; margin-top: 7px; }
+.human-detail-meta { color: var(--muted); font-size: 10.5px; line-height: 1.7; overflow-wrap: anywhere; }
 .muted-note { padding: 10px 12px; color: var(--muted); font-size: 11px; }
 .detail-card { margin-top: 14px; }
 .detail-card.hide { display: none; }
@@ -249,6 +263,7 @@ button { cursor: pointer; }
           <button type="button" id="zoomOut" title="缩小">−</button>
           <span class="zoom-label" id="zoomLabel">100%</span>
           <button type="button" id="zoomIn" title="放大">＋</button>
+          <button type="button" id="graphMode" title="切换简化/完整节点图">简化</button>
           <button type="button" id="fitAll" title="适应画布">适应</button>
           <button type="button" id="fitOne" title="实际大小">1:1</button>
         </div>
@@ -268,7 +283,7 @@ button { cursor: pointer; }
 
       <section class="card queue-card">
         <div class="card-head"><strong>节点队列</strong><span class="hint" id="queueHint"></span></div>
-        <div class="queue-list" id="queueList" role="region" aria-label="节点队列（可滚动）" tabindex="0"></div>
+        <div class="queue-grid" id="queueList" role="list" aria-label="节点队列（方块）"></div>
       </section>
 
       <section class="card human-card">
@@ -277,6 +292,16 @@ button { cursor: pointer; }
       </section>
     </div>
   </div>
+
+  <section class="card human-detail-card hide" id="humanDetailCard">
+    <div class="card-head">
+      <strong>Human 待处理详情</strong>
+      <span class="hint" id="humanDetailHint"></span>
+      <span class="spacer"></span>
+      <button class="icon-btn" id="closeHumanDetail" type="button" title="关闭 Human 详情" aria-label="关闭 Human 详情">×</button>
+    </div>
+    <div class="detail-body" id="humanDetailBody"></div>
+  </section>
 
   <section class="card detail-card hide" id="detailCard">
     <div class="card-head">
@@ -315,6 +340,8 @@ button { cursor: pointer; }
 
   let state = null;
   let selected = null;
+  let graphMode = "full";
+  let humanDetailToken = null;
   let graphSize = { width: 0, height: 0 };
   let view = { scale: 1, tx: 0, ty: 0, initialized: false };
   let drag = null;
@@ -347,9 +374,16 @@ button { cursor: pointer; }
   function nodeStat(node) {
     const value = state.run?.nodeStats?.[node.id] || {};
     const active = number(value.active), queued = number(value.queued), waiting = number(value.waiting);
+    const errors = (state.run?.tokens || []).filter(token => token.nodeId === node.id && ["failed", "interrupted"].includes(token.status)).length;
     const enabled = state.control?.nodes?.[node.id];
     const status = enabled === false || (enabled === undefined && value.status === "disabled") ? "disabled" : active ? "running" : "idle";
-    return { status, active, queued, waiting, capacity: Math.max(1, number(value.capacity || node.concurrency || 1)) };
+    const tone = errors ? "error" : waiting ? "waiting" : status;
+    return { status, tone, errors, active, queued, waiting, capacity: Math.max(1, number(value.capacity || node.concurrency || 1)) };
+  }
+  function visibleDefinition() {
+    if (graphMode === "full") return state.definition;
+    const hidden = new Set(state.definition.nodes.filter(node => node.id.startsWith("busy-")).map(node => node.id));
+    return { ...state.definition, nodes: state.definition.nodes.filter(node => !hidden.has(node.id)), edges: state.definition.edges.filter(edge => !hidden.has(edge.from) && !hidden.has(edge.to)) };
   }
   function historyKey(nodeId) { return JSON.stringify([state.run?.runId, nodeId]); }
   function artifactKey(ref) { return JSON.stringify([state.run?.runId, ref]); }
@@ -447,7 +481,7 @@ button { cursor: pointer; }
     if (next.control !== undefined) state.control = next.control;
     if (next.models !== undefined) state.models = next.models;
     if (previous?.run?.runId !== state.run?.runId) {
-      nodeHistory.clear(); artifacts.clear(); openedArtifact = null; noteDrafts.clear();
+      nodeHistory.clear(); artifacts.clear(); openedArtifact = null; noteDrafts.clear(); humanDetailToken = null;
       for (const [key, draft] of modelDrafts) if (!draft.dirty) modelDrafts.delete(key);
     }
     for (const [key, draft] of modelDrafts) if (!draft.dirty) modelDrafts.delete(key);
@@ -750,7 +784,7 @@ button { cursor: pointer; }
   }
 
   function renderGraph() {
-    const definition = state.definition;
+    const definition = visibleDefinition();
     const graph = layout(definition);
     graphSize = { width: graph.width, height: graph.height };
     const parts = [];
@@ -767,13 +801,14 @@ button { cursor: pointer; }
     for (const node of graph.nodes) {
       const stat = nodeStat(node);
       const status = stat.status;
+      const tone = stat.tone;
       const style = STYLE[node.type] || { color: "#8a929e", glyph: "?" };
       const titleLines = wrap(node.title || node.id, 266);
       const metaY = node.y + (titleLines.length > 1 ? 58 : 48);
       const detailY = metaY + 16;
-      const dotColor = status === "running" ? "var(--brand)" : status === "disabled" ? "var(--muted)" : "var(--ok)";
-      const statusLabel = SERVICE[status] + " · 活跃 " + stat.active + "/" + stat.capacity + " · 排队 " + stat.queued + " · 等待 " + stat.waiting;
-      const classes = ["node-box", status, node.type === "human" ? "human" : "", selected === node.id ? "selected" : ""].filter(Boolean).join(" ");
+      const dotColor = tone === "error" ? "var(--bad)" : tone === "waiting" ? "var(--warn)" : tone === "running" ? "var(--brand)" : tone === "disabled" ? "var(--muted)" : "var(--ok)";
+      const statusLabel = (tone === "waiting" ? "等待" : SERVICE[status]) + (stat.errors ? " · 错误 " + stat.errors : "") + " · 活跃 " + stat.active + "/" + stat.capacity + " · 排队 " + stat.queued + " · 等待 " + stat.waiting;
+      const classes = ["node-box", tone, node.type === "human" ? "human" : "", selected === node.id ? "selected" : ""].filter(Boolean).join(" ");
       parts.push('<g class="node" data-node="' + esc(node.id) + '" role="button" tabindex="0" aria-label="' + esc(node.title || node.id) + '">');
       parts.push('<rect class="' + classes + '" x="' + node.x + '" y="' + node.y + '" width="' + node.w + '" height="' + node.h + '" rx="11"/>');
       parts.push('<rect x="' + (node.x + 1) + '" y="' + (node.y + 14) + '" width="2.5" height="' + (node.h - 28) + '" rx="1.25" fill="' + style.color + '" opacity=".65"/>');
@@ -825,9 +860,23 @@ button { cursor: pointer; }
     renderHuman();
   }
 
+  function noteFields() {
+    const todo = [...$("humanTodo").querySelectorAll("[data-note]")];
+    const detail = [...$("humanDetailBody").querySelectorAll("[data-note]")];
+    return humanDetailToken ? [...detail, ...todo] : [...todo, ...detail];
+  }
+
+  function humanDetailItem(tokenId) {
+    return (state.run?.waiting || []).find(item => (item.tokenId || item.id) === tokenId) || null;
+  }
+
+  function humanDetailRef(item, token) {
+    return item?.inputRef || token?.inputRef || null;
+  }
+
   function renderHuman() {
     const run = state.run;
-    for (const field of $("humanTodo").querySelectorAll("[data-note]")) noteDrafts.set(field.dataset.note, field.value);
+    for (const field of noteFields()) noteDrafts.set(field.dataset.note, field.value);
     const focus = document.activeElement?.dataset?.note;
     const selectionStart = focus ? document.activeElement.selectionStart : null;
     const selectionEnd = focus ? document.activeElement.selectionEnd : null;
@@ -843,17 +892,85 @@ button { cursor: pointer; }
       const outcomes = Array.isArray(item.outcomes) ? item.outcomes : (node?.config?.outcomes || ["approve", "reject"]);
       return '<div class="human-item"><div class="human-item-title">' + esc(item.title || node?.title || item.nodeId) + '</div>' +
         '<div class="human-item-meta">节点 ' + esc(item.nodeId) + ' · 数据包 ' + esc(item.packetId || token?.packetId || '—') + (token?.createdAt ? ' · ' + esc(formatTime(token.createdAt)) : '') + '</div>' +
-        '<button class="ref-btn" type="button" data-select-node="' + esc(item.nodeId) + '">查看节点与输入引用</button>' +
+        '<div class="human-item-actions"><button class="ref-btn" type="button" data-human-detail="' + esc(tokenId) + '">查看详情与输入</button><button class="ref-btn" type="button" data-select-node="' + esc(item.nodeId) + '">查看节点</button></div>' +
         '<textarea class="human-item-note" data-note="' + esc(tokenId) + '" aria-label="人工决策留言" placeholder="可选：审批留言/修改意见">' + esc(noteDrafts.get(tokenId) || "") + '</textarea>' +
         '<div class="human-item-actions">' + outcomes.map(outcome =>
           '<button type="button" class="btn ' + (outcome === "reject" ? "reject" : "primary") + '" data-token="' + esc(tokenId) + '" data-outcome="' + esc(outcome) + '"' + (busy ? ' disabled' : '') + '>' + esc(outcome) + "</button>"
         ).join("") + '</div></div>';
     }).join("");
     $("humanTodo").innerHTML = items || '<div class="human-empty">当前没有待人工处理的数据包。<br>Human 节点只等待对应数据包；其他数据包仍可流转。历史记录可在节点详情中按需查看。</div>';
+    renderHumanDetail();
     if (focus) {
-      const field = [...$("humanTodo").querySelectorAll("[data-note]")].find(item => item.dataset.note === focus);
+      const field = noteFields().find(item => item.dataset.note === focus);
       field?.focus({preventScroll:true}); field?.setSelectionRange(selectionStart, selectionEnd);
     }
+  }
+
+  function renderHumanDetail() {
+    const card = $("humanDetailCard"), body = $("humanDetailBody"), hint = $("humanDetailHint");
+    const item = humanDetailToken ? humanDetailItem(humanDetailToken) : null;
+    if (!item) {
+      humanDetailToken = null;
+      card.classList.add("hide");
+      body.innerHTML = "";
+      hint.textContent = "";
+      return;
+    }
+    const tokenId = item.tokenId || item.id;
+    const token = (state.run?.tokens || []).find(candidate => candidate.id === tokenId);
+    const node = state.definition.nodes.find(candidate => candidate.id === item.nodeId);
+    const outcomes = Array.isArray(item.outcomes) ? item.outcomes : (node?.config?.outcomes || ["approve", "reject"]);
+    const ref = humanDetailRef(item, token);
+    const artifact = ref ? artifacts.get(artifactKey(ref)) : null;
+    const input = !ref
+      ? '<div class="muted-note">此 Human token 没有输入引用。请结合节点说明和留言处理。</div>'
+      : artifact?.loading
+        ? '<div class="muted-note">正在读取 Human 输入…</div>'
+        : artifact?.error
+          ? '<div class="critical-error">读取输入失败：' + esc(artifact.error) + '<div class="human-detail-actions"><button class="btn" type="button" data-load-human-input="' + esc(ref) + '">重试</button></div></div>'
+          : artifact
+            ? '<pre class="human-detail-input">' + esc(JSON.stringify(artifact.value, null, 2)) + '</pre>'
+            : '<div class="muted-note">尚未读取输入。<div class="human-detail-actions"><button class="btn" type="button" data-load-human-input="' + esc(ref) + '">读取输入</button></div></div>';
+    card.classList.remove("hide");
+    hint.textContent = safeText(item.title || node?.title || item.nodeId);
+    body.innerHTML =
+      '<div class="detail-side"><div class="human-detail-meta">' +
+        '<div><strong>' + esc(item.title || node?.title || item.nodeId) + '</strong></div>' +
+        '<div>节点：' + esc(item.nodeId) + ' · ' + esc(TYPE[node?.type] || node?.type || "Human") + '</div>' +
+        '<div>数据包：' + esc(item.packetId || token?.packetId || "—") + '</div>' +
+        '<div>Token：' + esc(tokenId) + '</div>' +
+        '<div>可选 outcome：' + outcomes.map(esc).join(" / ") + '</div>' +
+        '<div>输入引用：' + (ref ? '<code>' + esc(ref) + '</code>' : '无') + '</div>' +
+      '</div>' +
+      '<div class="human-detail-actions"><button class="btn" type="button" data-select-node="' + esc(item.nodeId) + '">查看节点详情</button></div>' +
+      '</div><div class="detail-main"><section class="detail-section"><div class="detail-section-head">Human 输入内容</div>' + input + '</section>' +
+      '<section class="detail-section"><div class="detail-section-head">决策留言</div><textarea class="human-detail-note" data-note="' + esc(tokenId) + '" aria-label="Human 决策留言" placeholder="写清楚批准/拒绝理由；reject/revision 必须有反馈">' + esc(noteDrafts.get(tokenId) || "") + '</textarea>' +
+      '<div class="human-detail-actions">' + outcomes.map(outcome =>
+        '<button type="button" class="btn ' + (outcome === "reject" ? "reject" : "primary") + '" data-token="' + esc(tokenId) + '" data-outcome="' + esc(outcome) + '"' + (busy ? ' disabled' : '') + '>' + esc(outcome) + '</button>'
+      ).join("") + '</div></section></div>';
+  }
+
+  async function openHumanDetail(tokenId) {
+    humanDetailToken = tokenId;
+    const item = humanDetailItem(tokenId);
+    const token = (state.run?.tokens || []).find(candidate => candidate.id === tokenId);
+    const ref = humanDetailRef(item, token);
+    renderHumanDetail();
+    if (ref) await loadHumanArtifact(ref);
+    $("humanDetailCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  async function loadHumanArtifact(ref) {
+    if (!state.run?.runId || !ref) return;
+    const runId = state.run.runId, key = artifactKey(ref);
+    if (artifacts.has(key) && !artifacts.get(key).error) { renderHumanDetail(); return; }
+    artifacts.set(key, { loading: true }); renderHumanDetail();
+    try {
+      const result = await getJson(API + "/artifact?" + new URLSearchParams({ session: SESSION, runId, ref }));
+      if (state.run?.runId === runId) artifacts.set(key, { ...result, loading: false });
+    } catch (error) { if (state.run?.runId === runId) artifacts.set(key, { loading: false, error: safeText(error.message) }); }
+    while (artifacts.size > 12) artifacts.delete(artifacts.keys().next().value);
+    renderHumanDetail();
   }
 
   function renderControl() {
@@ -866,15 +983,19 @@ button { cursor: pointer; }
   function renderQueue() {
     const nodes = state.definition?.nodes || [];
     const queued = nodes.reduce((sum, node) => sum + nodeStat(node).queued, 0);
-    $("queueHint").textContent = nodes.length + " 节点 · " + queued + " 排队 · 区内滚动";
-    const list = $("queueList"), scrollTop = list.scrollTop;
-    list.innerHTML = nodes.length
+    $("queueHint").textContent = nodes.length + " 节点 · " + queued + " 排队 · 方块颜色=状态";
+    $("queueList").innerHTML = nodes.length
       ? nodes.map(node => {
-          const stat = nodeStat(node);
-          return '<div class="queue-item"><div class="queue-item-title"><button class="node-link" type="button" data-select-node="' + esc(node.id) + '">' + esc(node.title || node.id) + '</button><span class="queue-service ' + stat.status + '">' + SERVICE[stat.status] + '</span></div><div class="queue-item-meta"><span>活跃 ' + stat.active + '/' + stat.capacity + '</span><span>排队 ' + stat.queued + '</span><span>等待 ' + stat.waiting + '</span></div></div>';
-        }).join("") + '<div class="queue-empty">节点关闭只暂停自己的队列；全局调度开关独立控制。点击节点查看数据包与引用。</div>'
+          const stat = nodeStat(node), style = STYLE[node.type] || { glyph: "?" };
+          const tone = stat.tone;
+          const label = stat.errors ? "错误 " + stat.errors : stat.waiting ? "等待" : SERVICE[stat.status];
+          const summary = "活跃 " + stat.active + "/" + stat.capacity + " · 排队 " + stat.queued + (stat.waiting ? " · 等待 " + stat.waiting : "") + (stat.errors ? " · 错误 " + stat.errors : "");
+          return '<button class="queue-tile ' + tone + '" type="button" role="listitem" data-select-node="' + esc(node.id) + '" title="' + esc((node.title || node.id) + " · " + label + " · " + summary) + '" aria-label="' + esc((node.title || node.id) + " · " + label + " · " + summary) + '">' +
+            '<span class="queue-tile-top"><span class="queue-tile-glyph">' + esc(style.glyph) + '</span><span>' + esc(label) + '</span></span>' +
+            '<span class="queue-tile-name">' + esc(node.title || node.id) + '</span>' +
+            '<span class="queue-tile-meta">' + esc(summary) + '</span></button>';
+        }).join("") + '<div class="queue-empty">每个方块是一个节点；颜色表示空闲/运行/等待/错误/关闭。点击方块查看数据包与引用。</div>'
       : '<div class="queue-empty">尚无节点。队列由运行时维护，不读取业务文件。</div>';
-    list.scrollTop = scrollTop;
   }
 
   function modelProviders() {
@@ -1026,6 +1147,7 @@ button { cursor: pointer; }
       $("runSummary").innerHTML = '<div>尚无工作流或运行记录。</div>';
       $("runBtn").disabled = true; $("stopBtn").disabled = true;
       $("humanTodo").innerHTML = '<div class="human-empty">Human 节点等待对应数据包时会显示在这里；其他数据包不受影响。</div>';
+      humanDetailToken = null; renderHumanDetail();
       $("detailCard").classList.add("hide"); renderControl(); renderQueue();
       return;
     }
@@ -1035,7 +1157,8 @@ button { cursor: pointer; }
     const status = $("status");
     status.className = "status " + (Object.hasOwn(STATUS, state.run?.status) ? state.run.status : "");
     status.textContent = safeText(state.run ? (STATUS[state.run.status] || state.run.status) : "未运行");
-    $("graphHint").textContent = "活跃/容量 · 排队/等待 · 拖拽/滚轮缩放";
+    $("graphMode").textContent = graphMode === "simple" ? "完整" : "简化";
+    $("graphHint").textContent = graphMode === "simple" ? "简化：隐藏 busy 重试门 · 方块颜色=状态" : "完整图 · 活跃/容量 · 拖拽/滚轮缩放";
     const command = state.permissions?.command;
     const http = state.permissions?.http;
     const commandText = command?.mode === "full" ? "完整" : command?.mode === "allowlist" ? "白名单" : "关闭";
@@ -1103,13 +1226,14 @@ button { cursor: pointer; }
 
   async function decide(tokenId, outcome) {
     if (busy || !state) return;
-    const field = [...document.querySelectorAll("[data-note]")].find(item => item.dataset.note === tokenId);
+    const fields = [...document.querySelectorAll("[data-note]")].filter(item => item.dataset.note === tokenId);
+    const field = fields.find(item => item.closest?.("#humanDetailBody")) ?? fields[0];
     const note = field?.value.trim() ?? noteDrafts.get(tokenId)?.trim() ?? "";
     if (note) noteDrafts.set(tokenId, note);
     busy = true; render();
     try {
       applyState(await postJson(API + "/decide", { session: SESSION, runId: state.run?.runId, tokenId, outcome, output: note ? { note } : null }));
-      noteDrafts.delete(tokenId);
+      noteDrafts.delete(tokenId); if (humanDetailToken === tokenId) humanDetailToken = null;
       toast("已记录此数据包的决策：" + outcome + "；其他数据包继续独立流转");
     } catch (error) {
       toast(error.message, true);
@@ -1139,14 +1263,36 @@ button { cursor: pointer; }
   $("zoomIn").addEventListener("click", () => zoomAt(1.2));
   $("fitAll").addEventListener("click", () => fitView("all"));
   $("fitOne").addEventListener("click", () => fitView("one"));
+  $("graphMode").addEventListener("click", () => {
+    graphMode = graphMode === "full" ? "simple" : "full";
+    view.initialized = false;
+    $("graphMode").textContent = graphMode === "simple" ? "完整" : "简化";
+    $("graphHint").textContent = graphMode === "simple" ? "简化：隐藏 busy 重试门 · 方块颜色=状态" : "完整图 · 活跃/容量 · 拖拽/滚轮缩放";
+    renderGraph(); fitView("all");
+  });
   $("closeDetail").addEventListener("click", () => { selected = null; renderDetail(); });
-  $("humanTodo").addEventListener("input", event => {
+  $("closeHumanDetail").addEventListener("click", () => { humanDetailToken = null; renderHumanDetail(); });
+  const onHumanInput = event => {
     const field = event.target.closest("[data-note]");
     if (field) noteDrafts.set(field.dataset.note, field.value);
-  });
+  };
+  $("humanTodo").addEventListener("input", onHumanInput);
+  $("humanDetailBody").addEventListener("input", onHumanInput);
   $("humanTodo").addEventListener("click", event => {
+    const detail = event.target.closest("[data-human-detail]");
+    if (detail) { openHumanDetail(detail.dataset.humanDetail); return; }
     const button = event.target.closest("[data-token][data-outcome]");
     if (button) { decide(button.dataset.token, button.dataset.outcome); return; }
+    const link = event.target.closest("[data-select-node]");
+    if (link) selectNode(link.dataset.selectNode);
+  });
+  $("humanDetailBody").addEventListener("click", event => {
+    const button = event.target.closest("[data-token][data-outcome]");
+    if (button) { decide(button.dataset.token, button.dataset.outcome); return; }
+    const load = event.target.closest("[data-load-human-input]");
+    if (load) { loadHumanArtifact(load.dataset.loadHumanInput); return; }
+    const ref = event.target.closest("[data-ref]");
+    if (ref) { openedArtifact = ref.dataset.ref; loadArtifact(ref.dataset.ref); return; }
     const link = event.target.closest("[data-select-node]");
     if (link) selectNode(link.dataset.selectNode);
   });

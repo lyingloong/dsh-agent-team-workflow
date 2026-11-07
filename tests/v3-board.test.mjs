@@ -51,7 +51,8 @@ function board(fetcher = async () => ({ ok: true, json: async () => ({}) })) {
     globalThis.boardTest = {
       setState: value => { state = value; }, getState: () => state,
       setSelected: value => { selected = value; },
-      render, renderRun, renderGraph, renderHuman, renderQueue, renderDetail,
+      render, renderRun, renderGraph, renderHuman, renderHumanDetail, renderQueue, renderDetail,
+      openHumanDetail, setGraphMode: value => { graphMode = value; renderGraph(); },
       nodeStat, modelDraft, renderModelPicker, reasoningOptions, selectNode,
       applyState, loadHistory, loadArtifact, saveNodeModels, decide, setControl, load, postJson, action,
       safeText, esc, fitView, zoomAt, getView: () => ({ ...view }),
@@ -86,7 +87,7 @@ function fixture() {
         other: { status: 'running', active: 1, capacity: 1, queued: 0, waiting: 0 },
       },
       packets: [{ id: 'packet-a', inputRef: 'original-a', lastRef: 'last-a', status: 'running' }],
-      waiting: [{ tokenId: 'human-token', packetId: 'packet-a', nodeId: 'human', outcomes: ['approve', 'reject'] }],
+      waiting: [{ tokenId: 'human-token', packetId: 'packet-a', nodeId: 'human', inputRef: 'input-human', outcomes: ['approve', 'reject'] }],
       tokens: [
         { id: 'worker-token', packetId: 'packet-a', nodeId: 'worker', status: 'running', inputRef: 'input-a', activity: { childId: 'child-9', message: 'Working' } },
         { id: 'human-token', packetId: 'packet-a', nodeId: 'human', status: 'waiting', inputRef: 'input-human' },
@@ -122,8 +123,8 @@ test('node badges describe services and capacity, not the most recent completed 
   api.setState(state); api.renderGraph();
   const markup = get('graph').innerHTML;
   assert.match(markup, /运行中 · 活跃 1\/3 · 排队 4 · 等待 0/);
-  assert.match(markup, /空闲 · 活跃 0\/1 · 排队 0 · 等待 1/);
-  assert.doesNotMatch(markup, /已完成|node-box done|node-box wait/);
+  assert.match(markup, /等待 · 活跃 0\/1 · 排队 0 · 等待 1/);
+  assert.doesNotMatch(markup, /已完成|node-box done|node-box wait(?![a-z])/);
   state.control.nodes.worker = false;
   api.renderGraph();
   assert.match(get('graph').innerHTML, /已关闭 · 活跃 1\/3/);
@@ -158,28 +159,54 @@ test('a mounted but idle native job remains stoppable and does not need redispat
   assert.equal(get('runBtn').disabled, true);
 });
 
-test('node queue has its own bounded keyboard-accessible scroll region', () => {
-  const rule = html.match(/\.queue-list \{([^}]+)\}/)[1];
-  assert.match(rule, /max-height: clamp\(160px, 28vh, 280px\)/);
-  assert.match(rule, /overflow-y: auto/);
-  assert.match(rule, /overscroll-behavior-y: contain/);
-  assert.match(html, /id="queueList"[^>]*role="region"[^>]*aria-label="节点队列（可滚动）"[^>]*tabindex="0"/);
-  assert.match(html, /\.queue-list > \* \{ flex-shrink: 0; \}/);
+test('simplified graph mode hides only busy retry gates', () => {
+  const { api, get } = board(), state = fixture();
+  state.definition.nodes.push({ id: 'busy-human', type: 'gate', config: { delayMs: 1000 } });
+  state.definition.edges.push({ from: 'human', to: 'busy-human', on: 'busy' }, { from: 'busy-human', to: 'human', on: 'complete' });
+  api.setState(state);
+  api.setGraphMode('simple');
+  const markup = get('graph').innerHTML;
+  assert.doesNotMatch(markup, /data-node="busy-human"/);
+  assert.match(markup, /data-node="worker"/);
+  assert.match(markup, /data-node="human"/);
+  assert.match(html, /id="graphMode"[^>]*>简化</);
 });
 
-test('refresh keeps the scrolled queue position and every node remains reachable', () => {
+test('node queue renders every node as a status-colored square tile', () => {
+  assert.match(html, /\.queue-grid \{[\s\S]*?grid-template-columns/);
+  assert.match(html, /id="queueList"[^>]*role="list"[^>]*aria-label="节点队列（方块）"/);
+  assert.doesNotMatch(html, /queue-item|区内滚动|可滚动/);
+  const { api, get } = board(), state = fixture();
+  state.run.tokens.push({ id: 'bad-worker', nodeId: 'worker', status: 'failed' });
+  api.setState(state); api.renderQueue();
+  const markup = get('queueList').innerHTML;
+  assert.equal((markup.match(/class="queue-tile /g) || []).length, 3);
+  assert.match(markup, /queue-tile error/);
+  assert.match(markup, /queue-tile waiting/);
+  assert.match(markup, /data-select-node="other"/);
+  assert.match(get('queueHint').textContent, /3 节点.*方块颜色=状态/);
+});
+
+test('all nodes remain reachable as tiles without a sliding queue window', () => {
   const { api, get } = board(), state = fixture();
   state.definition.nodes = Array.from({ length: 51 }, (_, index) => ({ id: `node-${index}`, type: 'command', config: {} }));
-  api.setState(state);
-  const list = get('queueList'); let markup = '';
-  Object.defineProperty(list, 'innerHTML', { get: () => markup, set: value => { markup = value; list.scrollTop = 0; } });
-  list.scrollTop = 240;
-  api.renderQueue();
-  assert.equal(list.scrollTop, 240);
-  assert.equal((markup.match(/class="queue-item"/g) || []).length, 51);
+  api.setState(state); api.renderQueue();
+  const markup = get('queueList').innerHTML;
+  assert.equal((markup.match(/class="queue-tile /g) || []).length, 51);
   assert.match(markup, /data-select-node="node-50"/);
-  assert.match(get('queueHint').textContent, /51 节点.*区内滚动/);
-  api.renderQueue(); assert.equal(list.scrollTop, 240);
+  assert.match(get('queueHint').textContent, /51 节点/);
+});
+
+test('Human pending has a dedicated detail view with input and outcomes', async () => {
+  const { api, get } = board(async () => ({ ok: true, json: async () => ({ value: { request: 'Approve this exact artifact?', commit: 'abc123' } }) }));
+  api.setState(fixture()); api.renderHuman();
+  assert.match(get('humanTodo').innerHTML, /data-human-detail="human-token"/);
+  await api.openHumanDetail('human-token');
+  assert.equal(get('humanDetailCard').classList.contains('hide'), false);
+  assert.match(get('humanDetailBody').innerHTML, /Human 输入内容/);
+  assert.match(get('humanDetailBody').innerHTML, /Approve this exact artifact/);
+  assert.match(get('humanDetailBody').innerHTML, /input-human/);
+  assert.match(get('humanDetailBody').innerHTML, /data-outcome="approve"/);
 });
 
 test('generic queue remains per node and does not couple Human waits to unrelated packets', () => {
