@@ -1,5 +1,9 @@
 # dsh-auto-workflow repository development rules
 
+## Release and tag authority
+
+**Never create, move, or delete a Git tag or GitHub Release without explicit user authorization for that exact action in the current conversation.** This includes draft releases, release-body edits, asset uploads, `--cleanup-tag`, and tag-ref writes through `gh api`. A request to implement, test, review, commit, or push is not release authorization; neither is a green CI run, a version bump, or a documentation change. If a release is needed, report the proposed tag, target commit, assets, and checksums, then wait for explicit approval.
+
 ## One current architecture, explicit version boundaries
 
 `dsh-auto-workflow` 1.0.0 (short display name: Auto Workflow) is the first curated public release.
